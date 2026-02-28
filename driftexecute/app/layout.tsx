@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Space_Grotesk } from "next/font/google";
 import "./globals.css";
+import "leaflet/dist/leaflet.css";
 
 const spaceGrotesk = Space_Grotesk({
   variable: "--font-space",
@@ -8,8 +9,8 @@ const spaceGrotesk = Space_Grotesk({
 });
 
 export const metadata: Metadata = {
-  title: "DriftExecute MVP",
-  description: "Travel planning frontend MVP with local-first mock intelligence.",
+  title: "InfraPulse MVP",
+  description: "Infrastructure risk and activity intelligence with local-first analytics.",
 };
 
 export default function RootLayout({
@@ -23,4 +24,7 @@ export default function RootLayout({
     </html>
   );
 }
+
+
+
 

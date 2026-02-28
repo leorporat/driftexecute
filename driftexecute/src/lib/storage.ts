@@ -1,6 +1,6 @@
 import type { AppStorageV1 } from "@/lib/types";
 
-export const storageKey = "travel_mvp_v1";
+export const storageKey = "infrapulse_app_v1";
 const currentVersion = 1;
 
 const emptyStorage: AppStorageV1 = {
@@ -77,3 +77,5 @@ export function resetStorage(): void {
   }
   localStorage.removeItem(storageKey);
 }
+
+

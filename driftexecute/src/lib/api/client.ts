@@ -7,6 +7,12 @@ import type {
   Constraint,
   CreateTripInput,
   ExecutionProfileResponse,
+  InfraAssetDetailsResponse,
+  InfraClusterItem,
+  InfraFeedbackInput,
+  InfraGeoJson,
+  InfraIngestInput,
+  InfraRecommendResponse,
   ExecuteTaskInput,
   ExecuteTaskResponse,
   Interest,
@@ -28,6 +34,11 @@ interface DestinationProfile {
   interests: Interest[];
   pace: Pace;
   constraintFriendly: Constraint[];
+}
+
+interface MlRecommendationResponse {
+  recommended_destinations: string[];
+  neighbors: Record<string, unknown>[];
 }
 
 const destinationCatalog: DestinationProfile[] = [
@@ -114,6 +125,9 @@ const destinationCatalog: DestinationProfile[] = [
 ];
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:3001";
+const ML_API_BASE_URL = process.env.NEXT_PUBLIC_ML_API_BASE_URL || "http://127.0.0.1:8001";
+const INFRA_FALLBACK_GEOJSON = "/infra/fallback-assets.geojson";
+const INFRA_UX_KEY = "infrapulse_ux_v1";
 
 function createId(prefix: string): string {
   if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
@@ -151,6 +165,74 @@ async function fetchBackend<T>(path: string, init?: RequestInit): Promise<T> {
   return response.json() as Promise<T>;
 }
 
+interface InfraUxState {
+  lastSelectedAssetId: string | null;
+  recentSearches: string[];
+  feedbackByAsset: Record<string, "up" | "down">;
+}
+
+function loadInfraUxState(): InfraUxState {
+  if (typeof window === "undefined") {
+    return {
+      lastSelectedAssetId: null,
+      recentSearches: [],
+      feedbackByAsset: {},
+    };
+  }
+  try {
+    const raw = localStorage.getItem(INFRA_UX_KEY);
+    if (!raw) {
+      throw new Error("missing");
+    }
+    const parsed = JSON.parse(raw) as Partial<InfraUxState>;
+    return {
+      lastSelectedAssetId: parsed.lastSelectedAssetId || null,
+      recentSearches: Array.isArray(parsed.recentSearches) ? parsed.recentSearches.slice(0, 12) : [],
+      feedbackByAsset: parsed.feedbackByAsset || {},
+    };
+  } catch {
+    return {
+      lastSelectedAssetId: null,
+      recentSearches: [],
+      feedbackByAsset: {},
+    };
+  }
+}
+
+function saveInfraUxState(state: InfraUxState): void {
+  if (typeof window === "undefined") {
+    return;
+  }
+  localStorage.setItem(INFRA_UX_KEY, JSON.stringify(state));
+}
+
+async function fetchMlRecommendations(
+  payload: Record<string, unknown>,
+): Promise<MlRecommendationResponse> {
+  const response = await fetch(`${ML_API_BASE_URL}/recommend`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(payload),
+  });
+
+  if (!response.ok) {
+    let message = `ML recommendation request failed (${response.status})`;
+    try {
+      const body = await response.json();
+      if (typeof body?.detail === "string") {
+        message = body.detail;
+      }
+    } catch {
+      // keep default message
+    }
+    throw new Error(message);
+  }
+
+  return response.json() as Promise<MlRecommendationResponse>;
+}
+
 function toUsd(value: number): string {
   return new Intl.NumberFormat("en-US", {
     style: "currency",
@@ -170,6 +252,140 @@ function estimateRange(center: number): string {
   const min = Math.max(50, Math.round(center * 0.85));
   const max = Math.round(center * 1.15);
   return `${toUsd(min)} - ${toUsd(max)}`;
+}
+
+function getStartMonth(trip: Trip | null): number | null {
+  if (!trip?.startDate) {
+    return null;
+  }
+  const parsed = new Date(trip.startDate);
+  if (Number.isNaN(parsed.getTime())) {
+    return null;
+  }
+  return parsed.getMonth() + 1;
+}
+
+function parseLooseNumber(value: unknown): number | null {
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return value;
+  }
+  if (typeof value !== "string") {
+    return null;
+  }
+  const cleaned = value.replace(/[^\d.-]/g, "").trim();
+  if (cleaned.length === 0) {
+    return null;
+  }
+  const parsed = Number(cleaned);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function inferAccommodationType(trip: Trip | null): string {
+  const text = trip ? `${trip.title} ${trip.tags.join(" ")} ${trip.notes}`.toLowerCase() : "";
+  if (text.includes("hostel")) {
+    return "Hostel";
+  }
+  if (text.includes("airbnb") || text.includes("apartment")) {
+    return "Apartment";
+  }
+  if (text.includes("resort")) {
+    return "Resort";
+  }
+  return "Hotel";
+}
+
+function inferTransportationType(trip: Trip | null): string {
+  const text = trip
+    ? `${trip.title} ${trip.tags.join(" ")} ${trip.highlights} ${trip.notes}`.toLowerCase()
+    : "";
+  if (text.includes("train")) {
+    return "Train";
+  }
+  if (text.includes("road") || text.includes("car") || text.includes("drive")) {
+    return "Car";
+  }
+  if (text.includes("bus")) {
+    return "Bus";
+  }
+  return "Flight";
+}
+
+function buildMlPayload(prefs: Preference, trips: Trip[]): Record<string, unknown> {
+  const referenceTrip = getReferenceTrip(trips) ?? trips[0] ?? null;
+  const preferredDays = Math.max(2, prefs.tripLengthPreferredDays || 5);
+  const budgetCenter = Math.max(0, Math.round((prefs.budgetMin + prefs.budgetMax) / 2));
+  const tripCost = Math.max(0, Math.round(referenceTrip?.totalCost || budgetCenter));
+  const accommodationCost = Math.round(tripCost * 0.65);
+  const transportationCost = Math.max(0, tripCost - accommodationCost);
+  const startMonth = getStartMonth(referenceTrip);
+
+  return {
+    "Duration (days)": preferredDays,
+    "Traveler age": null,
+    "Traveler gender": "Unknown",
+    "Traveler nationality": "Unknown",
+    "Accommodation type": inferAccommodationType(referenceTrip),
+    "Accommodation cost": accommodationCost,
+    "Transportation type": inferTransportationType(referenceTrip),
+    "Transportation cost": transportationCost,
+    ...(startMonth ? { start_month: startMonth } : {}),
+  };
+}
+
+function mapMlRecommendations(
+  response: MlRecommendationResponse,
+  prefs: Preference,
+  trips: Trip[],
+): Recommendation[] {
+  const preferredDays = Math.max(2, prefs.tripLengthPreferredDays || 5);
+  const budgetCenter = Math.max(200, Math.round((prefs.budgetMin + prefs.budgetMax) / 2));
+  const neighbors = Array.isArray(response.neighbors) ? response.neighbors : [];
+
+  return response.recommended_destinations.slice(0, 3).map((destination, index) => {
+    const destinationNeighbors = neighbors.filter((neighbor) => {
+      const value =
+        neighbor["Destination"] ??
+        neighbor["Travel destination"] ??
+        neighbor["City"] ??
+        neighbor["Place"];
+      return typeof value === "string" && value.toLowerCase() === destination.toLowerCase();
+    });
+
+    const strongestSimilarity = destinationNeighbors
+      .map((neighbor) => parseLooseNumber(neighbor.similarity))
+      .filter((value): value is number => value !== null)
+      .sort((a, b) => b - a)[0];
+
+    const estimatedCosts = destinationNeighbors
+      .map((neighbor) => {
+        const lodging = parseLooseNumber(neighbor["Accommodation cost"]);
+        const transit = parseLooseNumber(neighbor["Transportation cost"]);
+        if (lodging === null && transit === null) {
+          return null;
+        }
+        return (lodging ?? 0) + (transit ?? 0);
+      })
+      .filter((value): value is number => value !== null && value > 0);
+
+    const estimatedCenter =
+      estimatedCosts.length > 0
+        ? estimatedCosts.reduce((sum, value) => sum + value, 0) / estimatedCosts.length
+        : budgetCenter;
+
+    const referenceTrip = getReferenceTrip(trips) ?? trips[0] ?? null;
+    const rationale = referenceTrip
+      ? `Model matched ${destination} against trips similar to ${referenceTrip.title} (${referenceTrip.rating}/10).`
+      : `Model matched ${destination} based on your saved profile.`;
+
+    return {
+      id: createId("rec"),
+      destination,
+      suggestedLengthDays: preferredDays,
+      estimatedCostRange: estimateRange(estimatedCenter),
+      rationale,
+      score: Number((strongestSimilarity ?? Math.max(0.25, 0.9 - index * 0.12)).toFixed(2)),
+    };
+  });
 }
 
 function scoreDestination(
@@ -297,6 +513,17 @@ export async function getRecommendations(): Promise<Recommendation[]> {
   const trips = await listTrips();
   if (!prefs || trips.length === 0) {
     return [];
+  }
+
+  try {
+    const payload = buildMlPayload(prefs, trips);
+    const mlResponse = await fetchMlRecommendations(payload);
+    const mapped = mapMlRecommendations(mlResponse, prefs, trips);
+    if (mapped.length > 0) {
+      return mapped;
+    }
+  } catch (error) {
+    console.warn("ML recommendations unavailable, falling back to local scorer.", error);
   }
 
   return destinationCatalog
@@ -462,6 +689,97 @@ export async function getExecutionProfile(userId: string): Promise<ExecutionProf
   return fetchBackend<ExecutionProfileResponse>(`/profile/${encodeURIComponent(userId)}`);
 }
 
+async function fetchFallbackInfraGeoJson(): Promise<InfraGeoJson> {
+  const response = await fetch(INFRA_FALLBACK_GEOJSON);
+  if (!response.ok) {
+    throw new Error("Fallback GeoJSON is unavailable.");
+  }
+  return response.json() as Promise<InfraGeoJson>;
+}
+
+export async function getInfraMapAssets(type: "all" | "road" | "bridge" = "all"): Promise<InfraGeoJson> {
+  try {
+    return await fetchBackend<InfraGeoJson>(`/api/map/assets?type=${encodeURIComponent(type)}`);
+  } catch (error) {
+    console.warn("Infra map API unavailable, using baked-in fallback sample.", error);
+    return fetchFallbackInfraGeoJson();
+  }
+}
+
+export async function getInfraAssetDetails(assetId: string): Promise<InfraAssetDetailsResponse> {
+  return fetchBackend<InfraAssetDetailsResponse>(`/api/asset/${encodeURIComponent(assetId)}`);
+}
+
+export async function getInfraActivityFeed(): Promise<InfraClusterItem[]> {
+  const response = await fetchBackend<InfraRecommendResponse<InfraClusterItem[]>>("/api/recommend", {
+    method: "POST",
+    body: JSON.stringify({ type: "reportCluster" }),
+  });
+  return Array.isArray(response.results) ? response.results : [];
+}
+
+export async function getInfraHotspots(input: {
+  lat?: number;
+  lon?: number;
+  radius_km?: number;
+}): Promise<Record<string, unknown>[]> {
+  const response = await fetchBackend<InfraRecommendResponse<Record<string, unknown>[]>>("/api/recommend", {
+    method: "POST",
+    body: JSON.stringify({ type: "areaHotspot", ...input }),
+  });
+  return Array.isArray(response.results) ? response.results : [];
+}
+
+export async function ingestInfraReport(input: InfraIngestInput): Promise<Record<string, unknown>> {
+  return fetchBackend<Record<string, unknown>>("/api/reports/ingest", {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+}
+
+export async function submitInfraFeedback(input: InfraFeedbackInput): Promise<Record<string, unknown>> {
+  const result = await fetchBackend<Record<string, unknown>>("/api/feedback", {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+  const current = loadInfraUxState();
+  current.feedbackByAsset[input.asset_id] = input.helpful ? "up" : "down";
+  saveInfraUxState(current);
+  return result;
+}
+
+export async function getInfraExamples(): Promise<{ asset_ids: string[]; voice_notes: string[] }> {
+  return fetchBackend<{ asset_ids: string[]; voice_notes: string[] }>("/api/examples");
+}
+
+export function getLastSelectedAssetId(): string | null {
+  return loadInfraUxState().lastSelectedAssetId;
+}
+
+export function setLastSelectedAssetId(assetId: string | null): void {
+  const current = loadInfraUxState();
+  current.lastSelectedAssetId = assetId;
+  saveInfraUxState(current);
+}
+
+export function pushInfraRecentSearch(value: string): void {
+  const text = value.trim();
+  if (!text) {
+    return;
+  }
+  const current = loadInfraUxState();
+  current.recentSearches = [text, ...current.recentSearches.filter((item) => item !== text)].slice(0, 12);
+  saveInfraUxState(current);
+}
+
+export function getInfraRecentSearches(): string[] {
+  return loadInfraUxState().recentSearches;
+}
+
+export function getInfraFeedbackByAsset(): Record<string, "up" | "down"> {
+  return loadInfraUxState().feedbackByAsset;
+}
+
 export const apiClient = {
   getPreferences,
   savePreferences,
@@ -480,4 +798,18 @@ export const apiClient = {
   executeTask,
   submitFeedback,
   getExecutionProfile,
+  getInfraMapAssets,
+  getInfraAssetDetails,
+  getInfraActivityFeed,
+  getInfraHotspots,
+  ingestInfraReport,
+  submitInfraFeedback,
+  getInfraExamples,
+  getLastSelectedAssetId,
+  setLastSelectedAssetId,
+  pushInfraRecentSearch,
+  getInfraRecentSearches,
+  getInfraFeedbackByAsset,
 };
+
+

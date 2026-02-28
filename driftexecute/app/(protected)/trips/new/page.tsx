@@ -98,26 +98,26 @@ export default function NewTripPage() {
   return (
     <section className="mx-auto max-w-3xl rounded-none bg-panel p-6 shadow-panel sm:p-8">
       <div className="mb-4 flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-slate-900">Add Past Trip</h1>
-        <Link className="text-sm font-semibold text-sky-700 hover:text-sky-900" href="/trips">
+        <h1 className="text-2xl font-bold text-zinc-100">Add Past Trip</h1>
+        <Link className="text-sm font-semibold text-orange-400 hover:text-orange-300" href="/trips">
           Back to trips
         </Link>
       </div>
 
       <form className="space-y-4" onSubmit={handleSubmit(onSubmit)}>
-        <label className="block text-sm font-semibold text-slate-700">
+        <label className="block text-sm font-semibold text-zinc-300">
           Title
           <input
-            className="mt-1 w-full rounded-none border border-slate-300 px-3 py-2 text-sm"
+            className="mt-1 w-full rounded-none border border-zinc-500 px-3 py-2 text-sm"
             {...register("title")}
           />
           {errors.title ? <p className="mt-1 text-sm text-rose-600">{errors.title.message}</p> : null}
         </label>
 
-        <label className="block text-sm font-semibold text-slate-700">
+        <label className="block text-sm font-semibold text-zinc-300">
           Destinations (comma-separated)
           <input
-            className="mt-1 w-full rounded-none border border-slate-300 px-3 py-2 text-sm"
+            className="mt-1 w-full rounded-none border border-zinc-500 px-3 py-2 text-sm"
             placeholder="Barcelona, Madrid"
             {...register("destinationsInput")}
           />
@@ -127,11 +127,11 @@ export default function NewTripPage() {
         </label>
 
         <div>
-          <label className="block text-sm font-semibold text-slate-700">
+          <label className="block text-sm font-semibold text-zinc-300">
             Trip photo
             <input
               accept="image/*"
-              className="mt-1 block w-full text-sm text-slate-700 file:mr-3 file:rounded-none file:border file:border-slate-300 file:bg-white file:px-3 file:py-1.5 file:text-sm file:font-semibold"
+              className="mt-1 block w-full text-sm text-zinc-300 file:mr-3 file:rounded-none file:border file:border-zinc-500 file:bg-zinc-700 file:px-3 file:py-1.5 file:text-sm file:font-semibold"
               onChange={handlePhotoChange}
               type="file"
             />
@@ -141,11 +141,11 @@ export default function NewTripPage() {
             <div className="mt-2">
               <img
                 alt="Trip preview"
-                className="h-40 w-full rounded-none border border-slate-200 object-cover"
+                className="h-40 w-full rounded-none border border-zinc-800 object-cover"
                 src={photoDataUrl}
               />
               <button
-                className="mt-2 rounded-none border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+                className="mt-2 rounded-none border border-zinc-500 px-3 py-1.5 text-xs font-semibold text-zinc-300 hover:bg-zinc-700"
                 onClick={() => setPhotoDataUrl(undefined)}
                 type="button"
               >
@@ -156,18 +156,18 @@ export default function NewTripPage() {
         </div>
 
         <div className="grid gap-4 sm:grid-cols-2">
-          <label className="text-sm font-semibold text-slate-700">
+          <label className="text-sm font-semibold text-zinc-300">
             Start date (optional)
             <input
-              className="mt-1 w-full rounded-none border border-slate-300 px-3 py-2 text-sm"
+              className="mt-1 w-full rounded-none border border-zinc-500 px-3 py-2 text-sm"
               type="date"
               {...register("startDate")}
             />
           </label>
-          <label className="text-sm font-semibold text-slate-700">
+          <label className="text-sm font-semibold text-zinc-300">
             End date (optional)
             <input
-              className="mt-1 w-full rounded-none border border-slate-300 px-3 py-2 text-sm"
+              className="mt-1 w-full rounded-none border border-zinc-500 px-3 py-2 text-sm"
               type="date"
               {...register("endDate")}
             />
@@ -175,59 +175,59 @@ export default function NewTripPage() {
         </div>
 
         <div className="grid gap-4 sm:grid-cols-2">
-          <label className="text-sm font-semibold text-slate-700">
+          <label className="text-sm font-semibold text-zinc-300">
             Total cost (USD)
             <input
-              className="mt-1 w-full rounded-none border border-slate-300 px-3 py-2 text-sm"
+              className="mt-1 w-full rounded-none border border-zinc-500 px-3 py-2 text-sm"
               type="number"
               {...register("totalCost")}
             />
           </label>
-          <label className="text-sm font-semibold text-slate-700">
+          <label className="text-sm font-semibold text-zinc-300">
             Rating (1-10)
             <input
-              className="mt-1 w-full rounded-none border border-slate-300 px-3 py-2 text-sm"
+              className="mt-1 w-full rounded-none border border-zinc-500 px-3 py-2 text-sm"
               type="number"
               {...register("rating")}
             />
           </label>
         </div>
 
-        <label className="block text-sm font-semibold text-slate-700">
+        <label className="block text-sm font-semibold text-zinc-300">
           Tags (comma-separated)
           <input
-            className="mt-1 w-full rounded-none border border-slate-300 px-3 py-2 text-sm"
+            className="mt-1 w-full rounded-none border border-zinc-500 px-3 py-2 text-sm"
             placeholder="food, museums, family"
             {...register("tagsInput")}
           />
         </label>
 
-        <label className="block text-sm font-semibold text-slate-700">
+        <label className="block text-sm font-semibold text-zinc-300">
           Highlights
           <textarea
-            className="mt-1 min-h-20 w-full rounded-none border border-slate-300 px-3 py-2 text-sm"
+            className="mt-1 min-h-20 w-full rounded-none border border-zinc-500 px-3 py-2 text-sm"
             {...register("highlights")}
           />
         </label>
 
-        <label className="block text-sm font-semibold text-slate-700">
+        <label className="block text-sm font-semibold text-zinc-300">
           Pain points
           <textarea
-            className="mt-1 min-h-20 w-full rounded-none border border-slate-300 px-3 py-2 text-sm"
+            className="mt-1 min-h-20 w-full rounded-none border border-zinc-500 px-3 py-2 text-sm"
             {...register("painPoints")}
           />
         </label>
 
-        <label className="block text-sm font-semibold text-slate-700">
+        <label className="block text-sm font-semibold text-zinc-300">
           Notes
           <textarea
-            className="mt-1 min-h-20 w-full rounded-none border border-slate-300 px-3 py-2 text-sm"
+            className="mt-1 min-h-20 w-full rounded-none border border-zinc-500 px-3 py-2 text-sm"
             {...register("notes")}
           />
         </label>
 
         <button
-          className="rounded-none bg-slate-900 px-5 py-2 text-sm font-semibold text-white hover:bg-slate-800 disabled:opacity-60"
+          className="rounded-none border border-accent bg-accent px-5 py-2 text-sm font-semibold text-zinc-950 hover:bg-accentDeep disabled:opacity-60"
           disabled={isSubmitting}
           type="submit"
         >
@@ -237,5 +237,8 @@ export default function NewTripPage() {
     </section>
   );
 }
+
+
+
 
 

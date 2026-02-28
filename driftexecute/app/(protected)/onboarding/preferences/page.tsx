@@ -40,8 +40,8 @@ function ChipGroup({ options, value, onChange }: ChipGroupProps) {
           <button
             className={`rounded-none border px-3 py-1.5 text-xs font-semibold transition ${
               selected
-                ? "border-sky-300 bg-sky-100 text-sky-800"
-                : "border-slate-300 bg-white text-slate-700 hover:bg-slate-50"
+                ? "border-orange-500/70 bg-accent/20 text-orange-300"
+                : "border-zinc-500 bg-zinc-700 text-zinc-300 hover:bg-zinc-600"
             }`}
             key={option}
             onClick={(event) => {
@@ -112,29 +112,29 @@ export default function PreferencesPage() {
   };
 
   if (loading) {
-    return <p className="text-sm text-slate-600">Loading preferences...</p>;
+    return <p className="read-box text-sm">Loading preferences...</p>;
   }
 
   return (
-    <section className="mx-auto max-w-3xl rounded-none bg-panel p-6 shadow-panel sm:p-8">
-      <h1 className="text-2xl font-bold text-slate-900">Travel Preferences</h1>
-      <p className="mt-2 text-sm text-slate-600">
+    <section className="mx-auto max-w-3xl rounded-none border border-zinc-500 bg-panelSoft p-6 shadow-panel sm:p-8">
+      <h1 className="text-2xl font-bold text-zinc-100">Travel Preferences</h1>
+      <p className="read-box mt-3 text-sm">
         These preferences drive recommendations and chat context.
       </p>
       <form className="mt-6 space-y-5" onSubmit={handleSubmit(onSubmit)}>
         <div className="grid gap-4 sm:grid-cols-2">
-          <label className="text-sm font-semibold text-slate-700">
+          <label className="text-sm font-semibold text-zinc-300">
             Budget min (USD)
             <input
-              className="mt-1 w-full rounded-none border border-slate-300 px-3 py-2 text-sm"
+              className="mt-1 w-full rounded-none border border-zinc-500 px-3 py-2 text-sm"
               type="number"
               {...register("budgetMin")}
             />
           </label>
-          <label className="text-sm font-semibold text-slate-700">
+          <label className="text-sm font-semibold text-zinc-300">
             Budget max (USD)
             <input
-              className="mt-1 w-full rounded-none border border-slate-300 px-3 py-2 text-sm"
+              className="mt-1 w-full rounded-none border border-zinc-500 px-3 py-2 text-sm"
               type="number"
               {...register("budgetMax")}
             />
@@ -144,19 +144,19 @@ export default function PreferencesPage() {
           <p className="text-sm text-rose-600">{errors.budgetMax.message}</p>
         ) : null}
 
-        <label className="block text-sm font-semibold text-slate-700">
+        <label className="block text-sm font-semibold text-zinc-300">
           Preferred trip length (days)
           <input
-            className="mt-1 w-full rounded-none border border-slate-300 px-3 py-2 text-sm"
+            className="mt-1 w-full rounded-none border border-zinc-500 px-3 py-2 text-sm"
             type="number"
             {...register("tripLengthPreferredDays")}
           />
         </label>
 
-        <label className="block text-sm font-semibold text-slate-700">
+        <label className="block text-sm font-semibold text-zinc-300">
           Pace
           <select
-            className="mt-1 w-full rounded-none border border-slate-300 px-3 py-2 text-sm"
+            className="mt-1 w-full rounded-none border border-zinc-500 px-3 py-2 text-sm"
             {...register("pace")}
           >
             {paceOptions.map((option) => (
@@ -168,7 +168,7 @@ export default function PreferencesPage() {
         </label>
 
         <div>
-          <p className="text-sm font-semibold text-slate-700">Interests</p>
+          <p className="text-sm font-semibold text-zinc-300">Interests</p>
           <Controller
             control={control}
             name="interests"
@@ -186,7 +186,7 @@ export default function PreferencesPage() {
         </div>
 
         <div>
-          <p className="text-sm font-semibold text-slate-700">Constraints</p>
+          <p className="text-sm font-semibold text-zinc-300">Constraints</p>
           <Controller
             control={control}
             name="constraints"
@@ -201,7 +201,7 @@ export default function PreferencesPage() {
         </div>
 
         <button
-          className="rounded-none bg-sky-600 px-5 py-2 text-sm font-semibold text-white hover:bg-sky-700 disabled:opacity-60"
+          className="rounded-none bg-accent px-5 py-2 text-sm font-semibold text-zinc-950 hover:bg-accentDeep disabled:opacity-60"
           disabled={isSubmitting}
           type="submit"
         >
@@ -211,5 +211,8 @@ export default function PreferencesPage() {
     </section>
   );
 }
+
+
+
 
 

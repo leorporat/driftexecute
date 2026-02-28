@@ -30,21 +30,21 @@ export default function TripsPage() {
     <section>
       <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900">Past Trips</h1>
-          <p className="text-sm text-slate-600">Add travel history used for recommendations and chat retrieval.</p>
+          <h1 className="text-2xl font-bold text-zinc-100">Past Trips</h1>
+          <p className="read-box mt-2 text-sm">Add travel history used for recommendations and chat retrieval.</p>
         </div>
         <Link
-          className="rounded-none bg-sky-600 px-4 py-2 text-sm font-semibold text-white hover:bg-sky-700"
+          className="rounded-none bg-accent px-4 py-2 text-sm font-semibold text-zinc-950 hover:bg-accentDeep"
           href="/trips/new"
         >
           Add trip
         </Link>
       </div>
 
-      {loading ? <p className="text-sm text-slate-600">Loading trips...</p> : null}
+      {loading ? <p className="read-box text-sm">Loading trips...</p> : null}
 
       {!loading && trips.length === 0 ? (
-        <div className="rounded-none bg-panel p-8 text-sm text-slate-600 shadow-panel">
+        <div className="read-box rounded-none p-8 text-sm shadow-panel">
           No trips yet. Add your first trip to power retrieval and recommendations.
         </div>
       ) : null}
@@ -57,5 +57,8 @@ export default function TripsPage() {
     </section>
   );
 }
+
+
+
 
 

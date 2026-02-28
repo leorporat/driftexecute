@@ -1,77 +1,25 @@
-# DriftExecute Frontend MVP
+# InfraPulse Frontend
 
-Next.js (App Router) + TypeScript + Tailwind frontend-only travel planning MVP.
+Next.js UI for infrastructure risk + activity intelligence.
 
-## Tech Stack
+## Key Pages
 
-- Next.js 14+ App Router
-- TypeScript
-- Tailwind CSS
-- Zustand
-- React Hook Form + Zod
-- Local persistence via `localStorage` (`travel_mvp_v1`)
+- `/map` - risk hotspots + asset drawer
+- `/activity` - heightened activity clusters
+- `/inspect` - voice/text inspection note ingestion
 
-## Features
+## Environment
 
-- Landing + simulated email-only login
-- Protected routes with local session gating
-- Preferences onboarding form
-- Past trip creation + listing + deletion
-- Retrieval-backed recommendations (top 3 with rationale)
-- Multi-turn chat assistant with local similarity citations
-- Versioned local schema + migration entrypoint
-- Local API abstraction in `src/lib/api/client.ts` for easy backend swap later
-
-## Install (pnpm)
-
-```bash
-pnpm install
-```
-
-## Run Dev
-
-```bash
-pnpm dev
-```
-
-Open `http://localhost:3000`.
-
-## Backend Integration (Local Testing)
-
-Run backend in a separate terminal:
-
-```bash
-cd /Users/leorporat/Documents/Projects/driftexecute/backend
-npm install
-npm run dev
-```
-
-Required backend env keys in `backend/.env`:
-
-- `OPENAI_API_KEY`
-- `SUPERMEMORY_API_KEY`
-
-Then run frontend:
-
-```bash
-cd /Users/leorporat/Documents/Projects/driftexecute/driftexecute
-npm install
-npm run dev
-```
-
-Optional frontend env (`driftexecute/.env.local`):
+Optional `.env.local`:
 
 - `NEXT_PUBLIC_API_BASE_URL=http://localhost:3001`
+- `NEXT_PUBLIC_ML_API_BASE_URL=http://127.0.0.1:8001`
 
-If omitted, frontend defaults to `http://localhost:3001`.
+## Local Run
 
-## Reset Local Data
+Use monorepo root script:
 
-Use browser devtools console:
-
-```js
-localStorage.removeItem("travel_mvp_v1");
-localStorage.removeItem("travel_mvp_session");
+```bash
+npm run dev:all
 ```
 
-Then refresh the page.

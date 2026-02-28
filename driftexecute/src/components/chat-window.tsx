@@ -102,13 +102,13 @@ export function ChatWindow() {
 
   if (loading) {
     return (
-      <div className="rounded-none bg-panel p-8 text-sm text-slate-600 shadow-panel">Loading chat...</div>
+      <div className="read-box rounded-none p-8 text-sm shadow-panel">Loading chat...</div>
     );
   }
 
   if (!activeSession) {
     return (
-      <div className="rounded-none bg-panel p-8 text-sm text-slate-600 shadow-panel">
+      <div className="read-box rounded-none p-8 text-sm shadow-panel">
         No chat session available.
       </div>
     );
@@ -116,9 +116,9 @@ export function ChatWindow() {
 
   return (
     <section className="grid gap-4 lg:grid-cols-[240px_1fr]">
-      <aside className="rounded-none bg-panel p-4 shadow-panel">
+      <aside className="rounded-none border border-zinc-500 bg-panelSoft p-4 shadow-panel">
         <button
-          className="mb-4 w-full rounded-none bg-sky-600 px-3 py-2 text-sm font-semibold text-white hover:bg-sky-700"
+          className="mb-4 w-full rounded-none bg-accent px-3 py-2 text-sm font-semibold text-zinc-950 hover:bg-accentDeep"
           onClick={() => {
             void handleNewChat();
           }}
@@ -131,8 +131,8 @@ export function ChatWindow() {
             <button
               className={`w-full rounded-none px-3 py-2 text-left text-sm ${
                 session.id === activeSessionId
-                  ? "bg-sky-100 text-sky-900"
-                  : "bg-slate-50 text-slate-700 hover:bg-slate-100"
+                  ? "bg-accent/20 text-orange-300"
+                  : "bg-zinc-700 text-zinc-300 hover:bg-zinc-600"
               }`}
               key={session.id}
               onClick={() => setActiveSessionId(session.id)}
@@ -144,14 +144,14 @@ export function ChatWindow() {
         </div>
       </aside>
 
-      <div className="rounded-none bg-panel p-4 shadow-panel">
-        <div className="h-[430px] space-y-3 overflow-y-auto rounded-none border border-slate-200 bg-slate-50 p-4">
+      <div className="rounded-none border border-zinc-500 bg-panelSoft p-4 shadow-panel">
+        <div className="h-[430px] space-y-3 overflow-y-auto rounded-none border border-zinc-800 bg-zinc-700 p-4">
           {activeSession.messages.map((message) => (
             <div
               className={`max-w-[85%] rounded-none px-4 py-3 text-sm leading-relaxed ${
                 message.role === "user"
-                  ? "ml-auto bg-sky-600 text-white"
-                  : "mr-auto bg-white text-slate-800"
+                  ? "ml-auto bg-accent text-zinc-950"
+                  : "mr-auto border border-zinc-500 bg-zinc-600 text-zinc-100"
               }`}
               key={message.id}
             >
@@ -170,13 +170,13 @@ export function ChatWindow() {
 
         <form className="mt-3 flex gap-2" onSubmit={handleSend}>
           <input
-            className="flex-1 rounded-none border border-slate-300 bg-white px-3 py-2 text-sm outline-none ring-sky-300 focus:ring-2"
+            className="flex-1 rounded-none border border-zinc-500 bg-zinc-700 px-3 py-2 text-sm outline-none ring-orange-500 focus:ring-2"
             onChange={(event) => setDraft(event.target.value)}
             placeholder="Ask about your next trip..."
             value={draft}
           />
           <button
-            className="rounded-none bg-slate-900 px-4 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-60"
+            className="rounded-none border border-accent bg-accent px-4 py-2 text-sm font-semibold text-zinc-950 hover:bg-accentDeep disabled:cursor-not-allowed disabled:opacity-60"
             disabled={sending}
             type="submit"
           >
