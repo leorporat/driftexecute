@@ -1,62 +1,30 @@
-# Offline Trip Recommender
+# InfraPulse ML Layer
 
-This folder contains an offline-trained, similarity-based travel recommender.
+This module powers infrastructure risk + activity intelligence.
 
-## Layout
+## Datasets
 
-- `ml/data/travel_details_dataset.csv`: training data (Kaggle CSV)
-- `ml/training/train_recommender.py`: offline training script
-- `ml/models/trip_recommender.joblib`: saved artifact
-- `ml/inference.py`: runtime inference module
+Synthetic (auto-generated if missing):
 
-## Train
+- `ml/datasets/bridges.csv` (>=300)
+- `ml/datasets/roads.csv` (>=800)
+- `ml/datasets/reports.csv` (>=3000)
 
-From repo root:
+## Training Artifacts
 
-```bash
-python ml/training/train_recommender.py
-```
+`python ml/training/train_infra_index.py`
 
-Artifact saved to:
+Outputs:
 
-```text
-ml/models/trip_recommender.joblib
-```
+- `ml/artifacts/infra_index.joblib`
+- cluster summaries + TF-IDF index + structured feature scaler
 
-## Start API Server
+## Inference
 
-Create and activate a virtualenv (recommended), then install deps:
+`ml/infra_inference.py` provides:
 
-```bash
-python -m venv .venv
-# Windows PowerShell:
-.venv\Scripts\Activate.ps1
-# macOS/Linux:
-# source .venv/bin/activate
+- map GeoJSON scores
+- asset detail retrieval
+- report clustering + cause hypotheses
+- ingestion + feedback loops
 
-pip install -r backend/python_api/requirements.txt
-```
-
-Run FastAPI server:
-
-```bash
-uvicorn backend.python_api.main:app --reload --port 8001
-```
-
-## Example curl
-
-```bash
-curl -X POST "http://127.0.0.1:8001/recommend" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "Duration (days)": 7,
-    "Traveler age": 26,
-    "Traveler gender": "Female",
-    "Traveler nationality": "American",
-    "Accommodation type": "Hotel",
-    "Accommodation cost": 1200,
-    "Transportation type": "Flight",
-    "Transportation cost": 600,
-    "start_month": 7
-  }'
-```
