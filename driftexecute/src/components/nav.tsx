@@ -5,10 +5,10 @@ import { usePathname, useRouter } from "next/navigation";
 import { useSessionStore } from "@/store/session";
 
 const links = [
-  { href: "/trips", label: "Trips" },
-  { href: "/onboarding/preferences", label: "Preferences" },
-  { href: "/recommendations", label: "Recommendations" },
-  { href: "/chat", label: "Assistant Chat" },
+  { href: "/map", label: "Map" },
+  { href: "/activity", label: "Activity" },
+  { href: "/inspect", label: "Inspect (Voice)" },
+  { href: "/execution-test", label: "Ops Assistant" },
 ];
 
 export function Nav() {
@@ -20,7 +20,7 @@ export function Nav() {
   return (
     <aside className="flex h-full flex-col border-r border-zinc-500 bg-panel px-4 py-6">
       <Link className="mb-8 px-2 text-5xl font-bold tracking-tight text-accent" href="/">
-        drift
+        pulse
       </Link>
 
       <ul className="space-y-2">
@@ -46,7 +46,7 @@ export function Nav() {
       <div className="mt-auto space-y-4">
         <div className="border border-zinc-200 bg-zinc-100 px-3 py-3 text-zinc-900">
           <p className="text-xs font-semibold uppercase tracking-wider">Pro tip</p>
-          <p className="mt-1 text-sm font-semibold">Use chat after adding 2+ trips.</p>
+          <p className="mt-1 text-sm font-semibold">Start at Map, then ingest a new inspection note.</p>
         </div>
         <div className="border border-zinc-500 bg-zinc-700 px-3 py-3">
           <p className="truncate text-xs text-zinc-400">{email}</p>

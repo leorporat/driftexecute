@@ -5,7 +5,6 @@ import { useRouter } from "next/navigation";
 import { useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
-import { getPreferences } from "@/lib/api/client";
 import { useSessionStore } from "@/store/session";
 
 const loginSchema = z.object({
@@ -33,15 +32,14 @@ export default function LoginPage() {
 
   useEffect(() => {
     if (hasHydrated && email && !isSubmitting) {
-      router.replace("/trips");
+      router.replace("/map");
     }
   }, [email, hasHydrated, isSubmitting, router]);
 
   const onSubmit = async (values: LoginValues) => {
     const normalized = values.email.trim().toLowerCase();
     setEmail(normalized);
-    const preferences = await getPreferences();
-    router.push(preferences ? "/trips" : "/onboarding/preferences");
+    router.push("/map");
   };
 
   if (!hasHydrated) {
@@ -55,8 +53,8 @@ export default function LoginPage() {
   return (
     <main className="mx-auto flex min-h-screen w-full max-w-md items-center px-6 py-16">
       <section className="w-full rounded-none border border-zinc-500 bg-panelSoft p-8 shadow-panel">
-        <h1 className="text-2xl font-bold tracking-tight text-zinc-100">Simulated Login</h1>
-        <p className="read-box mt-3 text-sm">Enter email only to start your local MVP session.</p>
+        <h1 className="text-2xl font-bold tracking-tight text-zinc-100">InfraPulse Login</h1>
+        <p className="read-box mt-3 text-sm">Email-only session for the infrastructure risk MVP.</p>
         <form className="mt-6 space-y-4" onSubmit={handleSubmit(onSubmit)}>
           <label className="block text-sm font-semibold text-zinc-300">
             Email
@@ -75,7 +73,7 @@ export default function LoginPage() {
           >
             {isSubmitting ? "Signing in..." : "Continue"}
           </button>
-          <p className="white-chip inline-block">Orange + white highlight theme active</p>
+          <p className="white-chip inline-block">No external auth required for demo</p>
         </form>
       </section>
     </main>

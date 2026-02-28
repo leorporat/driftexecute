@@ -42,14 +42,14 @@ export default function ProtectedLayout({
         <div className="flex min-h-full flex-col bg-panelSoft">
           <header className="flex flex-wrap items-center justify-between gap-3 border-b border-zinc-500 px-6 py-4">
             <div className="min-w-[240px] border border-zinc-500 bg-zinc-700 px-3 py-2 text-sm text-zinc-400">
-              Search trips, notes, or destinations...
+              Search asset IDs, clusters, or inspection notes...
             </div>
             <div className="flex items-center gap-2">
               <div className="white-chip">
-                1,230 XP
+                InfraPulse
               </div>
               <div className="border border-accent bg-zinc-700 px-3 py-1 text-xs font-semibold text-orange-300">
-                0 days
+                Live Risk Feed
               </div>
               <div className="flex h-8 w-8 items-center justify-center border border-zinc-200 bg-zinc-100 text-sm font-bold text-zinc-900">
                 {initials(email)}
