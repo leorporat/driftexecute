@@ -6,12 +6,17 @@ import type {
   ChatSession,
   Constraint,
   CreateTripInput,
+  ExecutionProfileResponse,
+  ExecuteTaskInput,
+  ExecuteTaskResponse,
   Interest,
   Pace,
   Preference,
   PreferenceInput,
   Recommendation,
   SimilarTripResult,
+  SubmitFeedbackInput,
+  SubmitFeedbackResponse,
   Trip,
   UpdateTripInput,
 } from "@/lib/types";
@@ -108,6 +113,8 @@ const destinationCatalog: DestinationProfile[] = [
   },
 ];
 
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:3001";
+
 function createId(prefix: string): string {
   if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
     return crypto.randomUUID();
@@ -117,6 +124,31 @@ function createId(prefix: string): string {
 
 function nowIso(): string {
   return new Date().toISOString();
+}
+
+async function fetchBackend<T>(path: string, init?: RequestInit): Promise<T> {
+  const response = await fetch(`${API_BASE_URL}${path}`, {
+    ...init,
+    headers: {
+      "Content-Type": "application/json",
+      ...(init?.headers || {}),
+    },
+  });
+
+  if (!response.ok) {
+    let message = `Backend request failed (${response.status})`;
+    try {
+      const body = await response.json();
+      if (typeof body?.error === "string") {
+        message = body.error;
+      }
+    } catch {
+      // keep default message
+    }
+    throw new Error(message);
+  }
+
+  return response.json() as Promise<T>;
 }
 
 function toUsd(value: number): string {
@@ -412,6 +444,24 @@ export async function appendChatMessage(
   });
 }
 
+export async function executeTask(input: ExecuteTaskInput): Promise<ExecuteTaskResponse> {
+  return fetchBackend<ExecuteTaskResponse>("/execute", {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+}
+
+export async function submitFeedback(input: SubmitFeedbackInput): Promise<SubmitFeedbackResponse> {
+  return fetchBackend<SubmitFeedbackResponse>("/feedback", {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+}
+
+export async function getExecutionProfile(userId: string): Promise<ExecutionProfileResponse> {
+  return fetchBackend<ExecutionProfileResponse>(`/profile/${encodeURIComponent(userId)}`);
+}
+
 export const apiClient = {
   getPreferences,
   savePreferences,
@@ -427,6 +477,9 @@ export const apiClient = {
   createChatSession,
   upsertChatSession,
   appendChatMessage,
+  executeTask,
+  submitFeedback,
+  getExecutionProfile,
 };
 
 
