@@ -1,0 +1,81 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "geometry": { "type": "Point", "coordinates": [-87.6761, 41.8842] },
+      "properties": {
+        "asset_id": "RD-00042",
+        "asset_type": "road",
+        "name": "Fallback Segment A-42",
+        "risk_score": 0.83,
+        "inconsistency_score": 0.61,
+        "activity_score": 0.76,
+        "top_reason": "activity spike",
+        "tags": ["pothole", "washout"],
+        "last_updated": "2026-02-28T00:00:00Z"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": { "type": "Point", "coordinates": [-87.6298, 41.8781] },
+      "properties": {
+        "asset_id": "BRG-0011",
+        "asset_type": "bridge",
+        "name": "Fallback Central Span 11",
+        "risk_score": 0.74,
+        "inconsistency_score": 0.57,
+        "activity_score": 0.58,
+        "top_reason": "inconsistency mismatch",
+        "tags": ["corrosion", "spalling"],
+        "last_updated": "2026-02-28T00:00:00Z"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": { "type": "Point", "coordinates": [-87.7023, 41.9454] },
+      "properties": {
+        "asset_id": "RD-00189",
+        "asset_type": "road",
+        "name": "Fallback Segment C-189",
+        "risk_score": 0.68,
+        "inconsistency_score": 0.34,
+        "activity_score": 0.63,
+        "top_reason": "condition deterioration",
+        "tags": ["crack", "drainage"],
+        "last_updated": "2026-02-28T00:00:00Z"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": { "type": "Point", "coordinates": [-87.5865, 41.7952] },
+      "properties": {
+        "asset_id": "BRG-0203",
+        "asset_type": "bridge",
+        "name": "Fallback South Span 203",
+        "risk_score": 0.79,
+        "inconsistency_score": 0.49,
+        "activity_score": 0.69,
+        "top_reason": "age and load pressure",
+        "tags": ["fatigue", "joint_failure"],
+        "last_updated": "2026-02-28T00:00:00Z"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": { "type": "Point", "coordinates": [-87.7956, 41.9724] },
+      "properties": {
+        "asset_id": "RD-00477",
+        "asset_type": "road",
+        "name": "Fallback Segment B-477",
+        "risk_score": 0.59,
+        "inconsistency_score": 0.2,
+        "activity_score": 0.52,
+        "top_reason": "condition deterioration",
+        "tags": ["pothole"],
+        "last_updated": "2026-02-28T00:00:00Z"
+      }
+    }
+  ]
+}
+

@@ -7,6 +7,12 @@ import type {
   Constraint,
   CreateTripInput,
   ExecutionProfileResponse,
+  InfraAssetDetailsResponse,
+  InfraClusterItem,
+  InfraFeedbackInput,
+  InfraGeoJson,
+  InfraIngestInput,
+  InfraRecommendResponse,
   ExecuteTaskInput,
   ExecuteTaskResponse,
   Interest,
@@ -120,6 +126,8 @@ const destinationCatalog: DestinationProfile[] = [
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:3001";
 const ML_API_BASE_URL = process.env.NEXT_PUBLIC_ML_API_BASE_URL || "http://127.0.0.1:8001";
+const INFRA_FALLBACK_GEOJSON = "/infra/fallback-assets.geojson";
+const INFRA_UX_KEY = "infrapulse_ux_v1";
 
 function createId(prefix: string): string {
   if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
@@ -155,6 +163,47 @@ async function fetchBackend<T>(path: string, init?: RequestInit): Promise<T> {
   }
 
   return response.json() as Promise<T>;
+}
+
+interface InfraUxState {
+  lastSelectedAssetId: string | null;
+  recentSearches: string[];
+  feedbackByAsset: Record<string, "up" | "down">;
+}
+
+function loadInfraUxState(): InfraUxState {
+  if (typeof window === "undefined") {
+    return {
+      lastSelectedAssetId: null,
+      recentSearches: [],
+      feedbackByAsset: {},
+    };
+  }
+  try {
+    const raw = localStorage.getItem(INFRA_UX_KEY);
+    if (!raw) {
+      throw new Error("missing");
+    }
+    const parsed = JSON.parse(raw) as Partial<InfraUxState>;
+    return {
+      lastSelectedAssetId: parsed.lastSelectedAssetId || null,
+      recentSearches: Array.isArray(parsed.recentSearches) ? parsed.recentSearches.slice(0, 12) : [],
+      feedbackByAsset: parsed.feedbackByAsset || {},
+    };
+  } catch {
+    return {
+      lastSelectedAssetId: null,
+      recentSearches: [],
+      feedbackByAsset: {},
+    };
+  }
+}
+
+function saveInfraUxState(state: InfraUxState): void {
+  if (typeof window === "undefined") {
+    return;
+  }
+  localStorage.setItem(INFRA_UX_KEY, JSON.stringify(state));
 }
 
 async function fetchMlRecommendations(
@@ -640,6 +689,97 @@ export async function getExecutionProfile(userId: string): Promise<ExecutionProf
   return fetchBackend<ExecutionProfileResponse>(`/profile/${encodeURIComponent(userId)}`);
 }
 
+async function fetchFallbackInfraGeoJson(): Promise<InfraGeoJson> {
+  const response = await fetch(INFRA_FALLBACK_GEOJSON);
+  if (!response.ok) {
+    throw new Error("Fallback GeoJSON is unavailable.");
+  }
+  return response.json() as Promise<InfraGeoJson>;
+}
+
+export async function getInfraMapAssets(type: "all" | "road" | "bridge" = "all"): Promise<InfraGeoJson> {
+  try {
+    return await fetchBackend<InfraGeoJson>(`/api/map/assets?type=${encodeURIComponent(type)}`);
+  } catch (error) {
+    console.warn("Infra map API unavailable, using baked-in fallback sample.", error);
+    return fetchFallbackInfraGeoJson();
+  }
+}
+
+export async function getInfraAssetDetails(assetId: string): Promise<InfraAssetDetailsResponse> {
+  return fetchBackend<InfraAssetDetailsResponse>(`/api/asset/${encodeURIComponent(assetId)}`);
+}
+
+export async function getInfraActivityFeed(): Promise<InfraClusterItem[]> {
+  const response = await fetchBackend<InfraRecommendResponse<InfraClusterItem[]>>("/api/recommend", {
+    method: "POST",
+    body: JSON.stringify({ type: "reportCluster" }),
+  });
+  return Array.isArray(response.results) ? response.results : [];
+}
+
+export async function getInfraHotspots(input: {
+  lat?: number;
+  lon?: number;
+  radius_km?: number;
+}): Promise<Record<string, unknown>[]> {
+  const response = await fetchBackend<InfraRecommendResponse<Record<string, unknown>[]>>("/api/recommend", {
+    method: "POST",
+    body: JSON.stringify({ type: "areaHotspot", ...input }),
+  });
+  return Array.isArray(response.results) ? response.results : [];
+}
+
+export async function ingestInfraReport(input: InfraIngestInput): Promise<Record<string, unknown>> {
+  return fetchBackend<Record<string, unknown>>("/api/reports/ingest", {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+}
+
+export async function submitInfraFeedback(input: InfraFeedbackInput): Promise<Record<string, unknown>> {
+  const result = await fetchBackend<Record<string, unknown>>("/api/feedback", {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+  const current = loadInfraUxState();
+  current.feedbackByAsset[input.asset_id] = input.helpful ? "up" : "down";
+  saveInfraUxState(current);
+  return result;
+}
+
+export async function getInfraExamples(): Promise<{ asset_ids: string[]; voice_notes: string[] }> {
+  return fetchBackend<{ asset_ids: string[]; voice_notes: string[] }>("/api/examples");
+}
+
+export function getLastSelectedAssetId(): string | null {
+  return loadInfraUxState().lastSelectedAssetId;
+}
+
+export function setLastSelectedAssetId(assetId: string | null): void {
+  const current = loadInfraUxState();
+  current.lastSelectedAssetId = assetId;
+  saveInfraUxState(current);
+}
+
+export function pushInfraRecentSearch(value: string): void {
+  const text = value.trim();
+  if (!text) {
+    return;
+  }
+  const current = loadInfraUxState();
+  current.recentSearches = [text, ...current.recentSearches.filter((item) => item !== text)].slice(0, 12);
+  saveInfraUxState(current);
+}
+
+export function getInfraRecentSearches(): string[] {
+  return loadInfraUxState().recentSearches;
+}
+
+export function getInfraFeedbackByAsset(): Record<string, "up" | "down"> {
+  return loadInfraUxState().feedbackByAsset;
+}
+
 export const apiClient = {
   getPreferences,
   savePreferences,
@@ -658,6 +798,18 @@ export const apiClient = {
   executeTask,
   submitFeedback,
   getExecutionProfile,
+  getInfraMapAssets,
+  getInfraAssetDetails,
+  getInfraActivityFeed,
+  getInfraHotspots,
+  ingestInfraReport,
+  submitInfraFeedback,
+  getInfraExamples,
+  getLastSelectedAssetId,
+  setLastSelectedAssetId,
+  pushInfraRecentSearch,
+  getInfraRecentSearches,
+  getInfraFeedbackByAsset,
 };
 
 
