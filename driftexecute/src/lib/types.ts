@@ -115,6 +115,66 @@ export interface ChatResponse {
   similarTrips: SimilarTripResult[];
 }
 
+export type ExecutionStrategy = "shorten+send" | "microstep+timer" | "choose-top-3";
+
+export interface StrategyStat {
+  success: number;
+  failure: number;
+}
+
+export interface UserProfile {
+  userId: string;
+  summary?: string;
+  strategyStats: Record<string, StrategyStat>;
+}
+
+export interface InteractionEvent {
+  id: string;
+  userId: string;
+  taskText: string;
+  taskCategory: string;
+  suggestedStrategy: ExecutionStrategy;
+  executed: boolean | null;
+  explanation?: string;
+  microSteps?: string[];
+  actionPayload?: Record<string, unknown> | null;
+  timestamp: string;
+  updatedAt?: string;
+}
+
+export interface ExecuteTaskInput {
+  userId: string;
+  taskText: string;
+  taskCategory?: string;
+}
+
+export interface ExecuteTaskResponse {
+  eventId: string;
+  explanation: string;
+  microSteps: string[];
+  recommendedStrategy: ExecutionStrategy;
+  actionPayload: Record<string, unknown> | null;
+}
+
+export interface SubmitFeedbackInput {
+  userId: string;
+  eventId: string;
+  executed: boolean;
+  suggestedStrategy?: ExecutionStrategy;
+}
+
+export interface SubmitFeedbackResponse {
+  eventId: string;
+  executed: boolean;
+  suggestedStrategy: ExecutionStrategy;
+  strategyStats: Record<string, StrategyStat>;
+}
+
+export interface ExecutionProfileResponse {
+  profile: UserProfile;
+  recentEvents: InteractionEvent[];
+}
+
 export interface AppStorageV1 {
   version: 1;
   preferences: Preference | null;

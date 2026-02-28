@@ -52,7 +52,39 @@ export async function generateExecutionPlan(context) {
               enum: ["shorten+send", "microstep+timer", "choose-top-3"],
             },
             actionPayload: {
-              anyOf: [{ type: "object" }, { type: "null" }],
+              anyOf: [
+                {
+                  type: "object",
+                  additionalProperties: false,
+                  required: [
+                    "firstStep",
+                    "timerMinutes",
+                    "draftLimitWords",
+                    "topThree",
+                  ],
+                  properties: {
+                    firstStep: {
+                      anyOf: [{ type: "string" }, { type: "null" }],
+                    },
+                    timerMinutes: {
+                      anyOf: [{ type: "number" }, { type: "null" }],
+                    },
+                    draftLimitWords: {
+                      anyOf: [{ type: "number" }, { type: "null" }],
+                    },
+                    topThree: {
+                      anyOf: [
+                        {
+                          type: "array",
+                          items: { type: "string" },
+                        },
+                        { type: "null" },
+                      ],
+                    },
+                  },
+                },
+                { type: "null" },
+              ],
             },
           },
         },
