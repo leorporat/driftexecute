@@ -1,2 +1,3 @@
 # ml data
 ml/data/*.csv
+node_modules/
