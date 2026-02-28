@@ -121,3 +121,5 @@ export interface AppStorageV1 {
   trips: Trip[];
   chatSessions: ChatSession[];
 }
+
+

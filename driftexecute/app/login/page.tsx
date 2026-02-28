@@ -47,21 +47,21 @@ export default function LoginPage() {
   if (!hasHydrated) {
     return (
       <main className="mx-auto flex min-h-screen w-full max-w-md items-center px-6">
-        <p className="text-sm text-slate-600">Loading session...</p>
+        <p className="read-box text-sm">Loading session...</p>
       </main>
     );
   }
 
   return (
     <main className="mx-auto flex min-h-screen w-full max-w-md items-center px-6 py-16">
-      <section className="w-full rounded-none bg-panel p-8 shadow-panel">
-        <h1 className="text-2xl font-bold tracking-tight text-slate-900">Simulated Login</h1>
-        <p className="mt-2 text-sm text-slate-600">Enter email only to start your local MVP session.</p>
+      <section className="w-full rounded-none border border-zinc-500 bg-panelSoft p-8 shadow-panel">
+        <h1 className="text-2xl font-bold tracking-tight text-zinc-100">Simulated Login</h1>
+        <p className="read-box mt-3 text-sm">Enter email only to start your local MVP session.</p>
         <form className="mt-6 space-y-4" onSubmit={handleSubmit(onSubmit)}>
-          <label className="block text-sm font-semibold text-slate-700">
+          <label className="block text-sm font-semibold text-zinc-300">
             Email
             <input
-              className="mt-1 w-full rounded-none border border-slate-300 px-3 py-2 text-sm outline-none ring-sky-300 focus:ring-2"
+              className="mt-1 w-full rounded-none border border-zinc-500 px-3 py-2 text-sm outline-none ring-orange-500 focus:ring-2"
               placeholder="you@example.com"
               type="email"
               {...register("email")}
@@ -69,16 +69,20 @@ export default function LoginPage() {
           </label>
           {errors.email ? <p className="text-sm text-rose-600">{errors.email.message}</p> : null}
           <button
-            className="w-full rounded-none bg-sky-600 px-4 py-2 text-sm font-semibold text-white hover:bg-sky-700 disabled:opacity-60"
+            className="w-full rounded-none bg-accent px-4 py-2 text-sm font-semibold text-zinc-950 hover:bg-accentDeep disabled:opacity-60"
             disabled={isSubmitting}
             type="submit"
           >
             {isSubmitting ? "Signing in..." : "Continue"}
           </button>
+          <p className="white-chip inline-block">Orange + white highlight theme active</p>
         </form>
       </section>
     </main>
   );
 }
+
+
+
 
 

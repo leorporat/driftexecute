@@ -36,14 +36,14 @@ export default function RecommendationsPage() {
   }, []);
 
   if (loading) {
-    return <p className="text-sm text-slate-600">Generating recommendations...</p>;
+    return <p className="read-box text-sm">Generating recommendations...</p>;
   }
 
   if (!preferences) {
     return (
-      <div className="rounded-none bg-panel p-8 text-sm text-slate-700 shadow-panel">
+      <div className="read-box rounded-none p-8 text-sm shadow-panel">
         Save your preferences first.
-        <Link className="ml-2 font-semibold text-sky-700 hover:text-sky-900" href="/onboarding/preferences">
+        <Link className="ml-2 font-semibold text-orange-400 hover:text-orange-300" href="/onboarding/preferences">
           Go to Preferences
         </Link>
       </div>
@@ -52,9 +52,9 @@ export default function RecommendationsPage() {
 
   if (tripCount === 0) {
     return (
-      <div className="rounded-none bg-panel p-8 text-sm text-slate-700 shadow-panel">
+      <div className="read-box rounded-none p-8 text-sm shadow-panel">
         Add at least one trip to generate retrieval-backed recommendations.
-        <Link className="ml-2 font-semibold text-sky-700 hover:text-sky-900" href="/trips/new">
+        <Link className="ml-2 font-semibold text-orange-400 hover:text-orange-300" href="/trips/new">
           Add Trip
         </Link>
       </div>
@@ -63,7 +63,7 @@ export default function RecommendationsPage() {
 
   if (recommendations.length === 0) {
     return (
-      <div className="rounded-none bg-panel p-8 text-sm text-slate-700 shadow-panel">
+      <div className="read-box rounded-none p-8 text-sm shadow-panel">
         No recommendations yet. Try adding richer trip notes and tags.
       </div>
     );
@@ -71,8 +71,8 @@ export default function RecommendationsPage() {
 
   return (
     <section>
-      <h1 className="text-2xl font-bold text-slate-900">Recommended Destinations</h1>
-      <p className="mt-2 text-sm text-slate-600">
+      <h1 className="text-2xl font-bold text-zinc-100">Recommended Destinations</h1>
+      <p className="read-box mt-3 text-sm">
         Top 3 destinations based on preferences + your past trips.
       </p>
       <div className="mt-5 grid gap-4 md:grid-cols-3">
@@ -83,5 +83,8 @@ export default function RecommendationsPage() {
     </section>
   );
 }
+
+
+
 
 
