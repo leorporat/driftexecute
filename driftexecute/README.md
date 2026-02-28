@@ -36,6 +36,35 @@ pnpm dev
 
 Open `http://localhost:3000`.
 
+## Backend Integration (Local Testing)
+
+Run backend in a separate terminal:
+
+```bash
+cd /Users/leorporat/Documents/Projects/driftexecute/backend
+npm install
+npm run dev
+```
+
+Required backend env keys in `backend/.env`:
+
+- `OPENAI_API_KEY`
+- `SUPERMEMORY_API_KEY`
+
+Then run frontend:
+
+```bash
+cd /Users/leorporat/Documents/Projects/driftexecute/driftexecute
+npm install
+npm run dev
+```
+
+Optional frontend env (`driftexecute/.env.local`):
+
+- `NEXT_PUBLIC_API_BASE_URL=http://localhost:3001`
+
+If omitted, frontend defaults to `http://localhost:3001`.
+
 ## Reset Local Data
 
 Use browser devtools console:

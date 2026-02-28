@@ -123,10 +123,11 @@ export async function getUserProfile(userId) {
 }
 
 export async function getRecentEvents(userId, n = 10) {
+  const searchLimit = Math.min(100, Math.max(n * 6, 40));
   const rawMemories = await searchMemories({
     userId,
     query: EVENT_PREFIX,
-    limit: Math.max(n * 6, 40),
+    limit: searchLimit,
   });
 
   const parsedEvents = rawMemories
@@ -193,8 +194,20 @@ export async function updateStrategyStats(userId, strategy, executed) {
 }
 
 export async function markEventExecuted(userId, eventId, executed) {
-  const recentEvents = await getRecentEvents(userId, 200);
-  const event = recentEvents.find((candidate) => candidate.id === eventId);
+  const idSearchMemories = await searchMemories({
+    userId,
+    query: eventId,
+    limit: 100,
+  });
+  const idMatchedEvents = idSearchMemories
+    .map((memory) => parseTaggedJson(memory, EVENT_PREFIX))
+    .filter(Boolean);
+
+  let event = idMatchedEvents.find((candidate) => candidate.id === eventId);
+  if (!event) {
+    const recentEvents = await getRecentEvents(userId, 100);
+    event = recentEvents.find((candidate) => candidate.id === eventId);
+  }
 
   if (!event) return null;
 

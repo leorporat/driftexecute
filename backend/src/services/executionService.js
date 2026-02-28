@@ -105,26 +105,29 @@ export async function executeTask({ userId, taskText, taskCategory }) {
   };
 }
 
-export async function submitFeedback({ userId, eventId, executed }) {
+export async function submitFeedback({
+  userId,
+  eventId,
+  executed,
+  suggestedStrategy,
+}) {
   if (!userId || !eventId || typeof executed !== "boolean") {
     throw new Error("userId, eventId and executed(boolean) are required");
   }
 
   const event = await markEventExecuted(userId, eventId, executed);
-  if (!event) {
+  const strategy = event?.suggestedStrategy || suggestedStrategy;
+
+  if (!strategy) {
     throw new Error("Event not found");
   }
 
-  const profile = await updateStrategyStats(
-    userId,
-    event.suggestedStrategy,
-    executed,
-  );
+  const profile = await updateStrategyStats(userId, strategy, executed);
 
   return {
     eventId,
     executed,
-    suggestedStrategy: event.suggestedStrategy,
+    suggestedStrategy: strategy,
     strategyStats: profile.strategyStats,
   };
 }

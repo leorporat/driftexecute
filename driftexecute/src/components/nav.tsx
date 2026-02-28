@@ -9,6 +9,7 @@ const links = [
   { href: "/onboarding/preferences", label: "Preferences" },
   { href: "/recommendations", label: "Recommendations" },
   { href: "/chat", label: "Chat" },
+  { href: "/execution-test", label: "Execution Test" },
 ];
 
 export function Nav() {
@@ -59,5 +60,4 @@ export function Nav() {
     </header>
   );
 }
-
 
