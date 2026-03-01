@@ -8,7 +8,6 @@ const links = [
   { href: "/map", label: "Map" },
   { href: "/activity", label: "Activity" },
   { href: "/inspect", label: "Inspect (Voice)" },
-  { href: "/execution-test", label: "Ops Assistant" },
 ];
 
 export function Nav() {
@@ -65,6 +64,3 @@ export function Nav() {
     </aside>
   );
 }
-
-
-

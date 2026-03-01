@@ -22,6 +22,9 @@ function getSpeechRecognitionCtor(): any {
 export default function InspectPage() {
   const [assetId, setAssetId] = useState("");
   const [description, setDescription] = useState("");
+  const [source, setSource] = useState<
+    "worker_log" | "construction_update" | "inspection" | "manual" | "voice"
+  >("worker_log");
   const [severity, setSeverity] = useState(3);
   const [imageUrl, setImageUrl] = useState("");
   const [supportsSpeech, setSupportsSpeech] = useState(false);
@@ -98,7 +101,7 @@ export default function InspectPage() {
     try {
       const payload = await ingestInfraReport({
         asset_id: assetId.trim(),
-        source: supportsSpeech ? "voice" : "manual",
+        source,
         description: description.trim(),
         severity,
         image_url: imageUrl.trim() || undefined,
@@ -116,7 +119,7 @@ export default function InspectPage() {
     <section className="max-w-4xl space-y-4">
       <h1 className="text-2xl font-bold text-zinc-100">Inspect (Voice)</h1>
       <p className="read-box text-sm">
-        Submit real-time inspection notes by voice (if supported) or text. Risk/activity scores update immediately.
+        Submit worker logs or construction updates by voice (if supported) or text. Risk scores update immediately.
       </p>
 
       <div className="grid gap-4 rounded-none border border-zinc-500 bg-panelSoft p-5 md:grid-cols-2">
@@ -133,6 +136,32 @@ export default function InspectPage() {
               <option key={id} value={id} />
             ))}
           </datalist>
+        </label>
+
+        <label className="text-sm font-semibold text-zinc-300">
+          Source
+          <select
+            className="mt-1 w-full border border-zinc-500 bg-zinc-700 px-3 py-2 text-sm"
+            onChange={(event) =>
+              setSource(
+                event.target.value as
+                  | "worker_log"
+                  | "construction_update"
+                  | "inspection"
+                  | "manual"
+                  | "voice",
+              )
+            }
+            value={source}
+          >
+            <option value="worker_log">Worker Log</option>
+            <option value="construction_update">Construction Update</option>
+            <option value="inspection">Inspection</option>
+            <option value="manual">Manual</option>
+            <option disabled={!supportsSpeech} value="voice">
+              Voice
+            </option>
+          </select>
         </label>
 
         <label className="text-sm font-semibold text-zinc-300">
@@ -197,7 +226,7 @@ export default function InspectPage() {
 
       {result ? (
         <div className="border border-zinc-500 bg-panelSoft p-4 shadow-panel">
-          <h2 className="text-lg font-semibold text-zinc-100">Updated asset signal</h2>
+          <h2 className="text-lg font-semibold text-zinc-100">Updated asset safety signal</h2>
           <pre className="mt-2 whitespace-pre-wrap text-xs text-zinc-200">
             {JSON.stringify(result, null, 2)}
           </pre>
@@ -217,4 +246,3 @@ export default function InspectPage() {
     </section>
   );
 }
-

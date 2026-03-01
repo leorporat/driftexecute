@@ -82,10 +82,17 @@ def ingest(payload: Dict[str, Any]) -> Dict[str, Any]:
         raise HTTPException(status_code=400, detail=f"reports/ingest failed: {exc}") from exc
 
 
+@app.post("/reports/ingest-batch")
+def ingest_batch(payload: Dict[str, Any]) -> Dict[str, Any]:
+    try:
+        return get_engine().ingest_batch(payload)
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=f"reports/ingest-batch failed: {exc}") from exc
+
+
 @app.post("/feedback")
 def feedback(payload: Dict[str, Any]) -> Dict[str, Any]:
     try:
         return get_engine().submit_feedback(payload)
     except Exception as exc:
         raise HTTPException(status_code=400, detail=f"feedback failed: {exc}") from exc
-
