@@ -21,6 +21,10 @@ function riskRadius(score: number): number {
   return 5 + Math.round(score * 7);
 }
 
+function haloRadius(score: number): number {
+  return riskRadius(score) + 6;
+}
+
 function FitToAssets({ assets, selectedAssetId }: { assets: InfraAssetFeature[]; selectedAssetId: string | null }) {
   const map = useMap();
 
@@ -58,28 +62,45 @@ export function InfraMapCanvas({ assets, selectedAssetId, onSelectAsset }: Infra
     <div className="h-[560px] w-full overflow-hidden border border-zinc-500">
       <MapContainerCompat center={[41.8781, -87.6298]} zoom={11} scrollWheelZoom className="h-full w-full">
         <TileLayerCompat
-          attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
-          url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+          attribution='&copy; OpenStreetMap contributors &copy; CARTO'
+          url="https://{s}.basemaps.cartocdn.com/light_nolabels/{z}/{x}/{y}{r}.png"
+        />
+        <TileLayerCompat
+          attribution='&copy; OpenStreetMap contributors &copy; CARTO'
+          url="https://{s}.basemaps.cartocdn.com/light_only_labels/{z}/{x}/{y}{r}.png"
         />
         <FitToAssets assets={assets} selectedAssetId={selectedAssetId} />
         {assets.map((asset) => {
           const score = asset.properties.risk_score;
           const selected = asset.properties.asset_id === selectedAssetId;
           return (
-            <CircleMarkerCompat
-              center={[asset.geometry.coordinates[1], asset.geometry.coordinates[0]]}
-              eventHandlers={{
-                click: () => onSelectAsset(asset.properties.asset_id),
-              }}
-              key={asset.properties.asset_id}
-              pathOptions={{
-                color: selected ? "#ffffff" : "#111827",
-                weight: selected ? 2 : 1,
-                fillColor: riskColor(score),
-                fillOpacity: selected ? 0.95 : 0.7,
-              }}
-              radius={riskRadius(score)}
-            />
+            <div key={asset.properties.asset_id}>
+              {score >= 0.6 ? (
+                <CircleMarkerCompat
+                  center={[asset.geometry.coordinates[1], asset.geometry.coordinates[0]]}
+                  interactive={false}
+                  pathOptions={{
+                    color: "transparent",
+                    fillColor: riskColor(score),
+                    fillOpacity: selected ? 0.2 : 0.12,
+                  }}
+                  radius={haloRadius(score)}
+                />
+              ) : null}
+              <CircleMarkerCompat
+                center={[asset.geometry.coordinates[1], asset.geometry.coordinates[0]]}
+                eventHandlers={{
+                  click: () => onSelectAsset(asset.properties.asset_id),
+                }}
+                pathOptions={{
+                  color: selected ? "#ffffff" : "#111827",
+                  weight: selected ? 2 : 1,
+                  fillColor: riskColor(score),
+                  fillOpacity: selected ? 0.98 : 0.76,
+                }}
+                radius={riskRadius(score)}
+              />
+            </div>
           );
         })}
       </MapContainerCompat>
