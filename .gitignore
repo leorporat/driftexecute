@@ -1,3 +1,7 @@
 # ml data
 ml/data/*.csv
 node_modules/
+**/__pycache__/
+*.pyc
+ml/feedback/*.jsonl
+.env
