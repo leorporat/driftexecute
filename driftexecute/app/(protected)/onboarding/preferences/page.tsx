@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { Controller, useForm } from "react-hook-form";
 import { z } from "zod";
-import { getPreferences, savePreferences } from "@/lib/api/client";
+import { apiClient } from "@/lib/api/client";
 import { constraintOptions, interestOptions, paceOptions } from "@/lib/types";
 import type { Constraint, Interest } from "@/lib/types";
 
@@ -85,7 +85,7 @@ export default function PreferencesPage() {
   useEffect(() => {
     let mounted = true;
     const load = async () => {
-      const existing = await getPreferences();
+      const existing = await apiClient.getPreferences();
       if (mounted && existing) {
         reset({
           budgetMin: existing.budgetMin,
@@ -107,7 +107,7 @@ export default function PreferencesPage() {
   }, [reset]);
 
   const onSubmit = async (values: PreferenceValues) => {
-    await savePreferences(values);
+    await apiClient.savePreferences(values);
     router.push("/trips");
   };
 
