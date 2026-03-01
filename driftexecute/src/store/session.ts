@@ -21,7 +21,7 @@ export const useSessionStore = create<SessionState>()(
       setHasHydrated: (value) => set({ hasHydrated: value }),
     }),
     {
-      name: "travel_mvp_session",
+      name: "infrapulse_session",
       storage: createJSONStorage(() => localStorage),
       onRehydrateStorage: () => (state) => {
         state?.setHasHydrated(true);
@@ -29,5 +29,3 @@ export const useSessionStore = create<SessionState>()(
     },
   ),
 );
-
-

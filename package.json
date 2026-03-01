@@ -5,8 +5,8 @@
   "scripts": {
     "dev:frontend": "npm --prefix driftexecute run dev",
     "dev:backend": "npm --prefix backend run dev",
-    "dev:ml": "python -m uvicorn backend.python_api.main:app --reload --port 8001",
-    "dev:all": "concurrently --kill-others-on-fail --names frontend,backend,ml --prefix-colors cyan,green,magenta \"npm --prefix driftexecute run dev\" \"npm --prefix backend run dev\" \"python -m uvicorn backend.python_api.main:app --reload --port 8001\""
+    "dev:ml": "python3 -m uvicorn backend.python_api.main:app --reload --port 8001",
+    "dev:all": "concurrently --kill-others-on-fail --names frontend,backend,ml --prefix-colors cyan,green,magenta \"npm --prefix driftexecute run dev\" \"npm --prefix backend run dev\" \"python3 -m uvicorn backend.python_api.main:app --reload --port 8001\""
   },
   "devDependencies": {
     "concurrently": "^9.2.1"

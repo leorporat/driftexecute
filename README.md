@@ -1,12 +1,13 @@
-# InfraPulse (MVP)
+# InfraPulse (Infrastructure-Only)
 
-InfraPulse is a local-first infrastructure intelligence MVP for roads and bridges.
+InfraPulse is a local-first infrastructure safety intelligence platform for roads and bridges.
 
-It combines:
-- map-level risk + inconsistency signals
-- heightened activity clustering
-- inspection note ingestion (voice/text)
-- offline synthetic datasets + local ML indexing
+It provides:
+- map-level risk, safety band, and urgency signals
+- activity clustering and inconsistency detection
+- worker log/construction update ingestion
+- immediate risk recalculation per affected asset
+- SQLite-backed event persistence for reports/feedback snapshots
 
 ## Architecture
 
@@ -17,32 +18,32 @@ It combines:
 
 ## Run (dev)
 
-From repo root (`driftexecute/`):
+From repo root:
 
 ```bash
 npm install
 npm run dev:all
 ```
 
-In another terminal (first run or dependency refresh):
+Install Python deps (first run):
 
 ```bash
-pip install -r backend/python_api/requirements.txt
+python3 -m pip install -r backend/python_api/requirements.txt
 ```
 
-The ML API auto-builds artifacts and synthetic datasets on startup when missing.
+## Core APIs
 
-## What It Does
-
-- `GET /api/map/assets` -> GeoJSON points with risk, inconsistency, activity.
-- `GET /api/asset/:id` -> full asset intelligence panel payload.
-- `POST /api/recommend` -> `assetRisk`, `areaHotspot`, `reportCluster`.
-- `POST /api/reports/ingest` -> add new voice/manual note and update scores.
+- `GET /api/map/assets` -> GeoJSON assets with `risk_score`, `safety_band`, `urgency`, and risk factors.
+- `GET /api/asset/:id` -> asset intelligence panel payload with recommendations.
+- `POST /api/recommend` -> `assetRisk`, `areaHotspot`, `reportCluster` modes.
+- `POST /api/reports/ingest` -> ingest one worker log/update and return updated asset + `risk_delta_24h`.
+- `POST /api/reports/ingest-batch` -> ingest CSV/rows batch and return top changed assets.
 - `POST /api/feedback` -> action ranking feedback loop.
 
-## Demo Flow
+## Safety Output
 
-1. Open **Map**, set a high risk threshold, click a hotspot asset.
-2. Review **inconsistency** + **cause hypotheses** + recommended actions.
-3. Open **Inspect (Voice)**, ingest a new note, then return to Map and confirm updated risk/activity.
-
+Each asset exposes:
+- `risk_score` in `[0,1]`
+- `safety_band` in `low|guarded|elevated|critical`
+- `urgency` in `monitor|schedule_30d|schedule_7d|immediate_48h`
+- `risk_factors` and ranked `recommended_actions`

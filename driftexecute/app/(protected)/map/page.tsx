@@ -197,8 +197,14 @@ export default function MapPage() {
                   {Number(selectedStats.confidence).toFixed(2)}
                 </p>
                 <p className="text-zinc-300">
+                  Band {String(selectedStats.safety_band)} • Urgency {String(selectedStats.urgency)}
+                </p>
+                <p className="text-zinc-300">
                   Activity {Number(selectedStats.activity_score).toFixed(2)} • Inconsistency{" "}
                   {Number(selectedStats.inconsistency_score).toFixed(2)}
+                </p>
+                <p className="mt-1 text-zinc-300">
+                  Factors: {Array.isArray(selectedStats.risk_factors) ? selectedStats.risk_factors.join(", ") : "n/a"}
                 </p>
               </div>
 

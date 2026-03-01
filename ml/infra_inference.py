@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+import csv
+import io
 import json
 import math
 import re
+import sqlite3
 import uuid
-from collections import defaultdict
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from functools import lru_cache
@@ -19,14 +21,12 @@ from sklearn.metrics.pairwise import cosine_similarity
 from ml.training.train_infra_index import (
     ARTIFACT_PATH,
     FEEDBACK_DIR,
-    REPORTS_PATH,
     STRUCTURED_COLS,
     build_infra_artifacts,
 )
 
-
-NEW_REPORTS_PATH = FEEDBACK_DIR / "new_reports.jsonl"
-FEEDBACK_PATH = FEEDBACK_DIR / "feedback.jsonl"
+DB_PATH = FEEDBACK_DIR / "infra_runtime.db"
+ALLOWED_SOURCES = {"worker_log", "construction_update", "inspection", "manual", "voice", "311", "contractor"}
 
 SEVERITY_HINTS = {
     "sinkhole": 5,
@@ -52,28 +52,6 @@ def parse_ts(value: Any) -> pd.Timestamp:
 
 def clamp(value: float, low: float = 0.0, high: float = 1.0) -> float:
     return float(max(low, min(high, value)))
-
-
-def read_jsonl(path: Path) -> List[Dict[str, Any]]:
-    if not path.exists():
-        return []
-    rows: list[dict[str, Any]] = []
-    with path.open("r", encoding="utf-8") as handle:
-        for line in handle:
-            line = line.strip()
-            if not line:
-                continue
-            try:
-                rows.append(json.loads(line))
-            except json.JSONDecodeError:
-                continue
-    return rows
-
-
-def append_jsonl(path: Path, payload: Dict[str, Any]) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open("a", encoding="utf-8") as handle:
-        handle.write(json.dumps(payload) + "\n")
 
 
 def tokenize(text: str) -> list[str]:
@@ -116,10 +94,7 @@ def haversine_km(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
     phi2 = math.radians(lat2)
     d_phi = math.radians(lat2 - lat1)
     d_lambda = math.radians(lon2 - lon1)
-    a = (
-        math.sin(d_phi / 2) ** 2
-        + math.cos(phi1) * math.cos(phi2) * math.sin(d_lambda / 2) ** 2
-    )
+    a = math.sin(d_phi / 2) ** 2 + math.cos(phi1) * math.cos(phi2) * math.sin(d_lambda / 2) ** 2
     return radius * (2 * math.atan2(math.sqrt(a), math.sqrt(1 - a)))
 
 
@@ -132,6 +107,26 @@ def score_severity_text(text: str) -> float:
     return clamp((hits / 8.0) + (weighted / 35.0))
 
 
+def safety_band_for_score(score: float) -> str:
+    if score < 0.30:
+        return "low"
+    if score < 0.55:
+        return "guarded"
+    if score < 0.75:
+        return "elevated"
+    return "critical"
+
+
+def urgency_for_band(band: str) -> str:
+    if band == "low":
+        return "monitor"
+    if band == "guarded":
+        return "schedule_30d"
+    if band == "elevated":
+        return "schedule_7d"
+    return "immediate_48h"
+
+
 @dataclass
 class AssetScores:
     risk_score: float
@@ -140,6 +135,253 @@ class AssetScores:
     confidence: float
     top_reason: str
     tags: list[str]
+    safety_band: str
+    urgency: str
+    risk_factors: list[str]
+
+
+class RuntimeRepository:
+    def __init__(self, db_path: Path = DB_PATH) -> None:
+        self.db_path = db_path
+        self.db_path.parent.mkdir(parents=True, exist_ok=True)
+        self.conn = sqlite3.connect(str(self.db_path), check_same_thread=False)
+        self.conn.row_factory = sqlite3.Row
+        self._migrate()
+
+    def _migrate(self) -> None:
+        self.conn.executescript(
+            """
+            PRAGMA journal_mode=WAL;
+
+            CREATE TABLE IF NOT EXISTS reports_events (
+              id INTEGER PRIMARY KEY AUTOINCREMENT,
+              report_id TEXT NOT NULL UNIQUE,
+              asset_id TEXT NOT NULL,
+              created_at TEXT NOT NULL,
+              report_type TEXT NOT NULL,
+              description TEXT NOT NULL,
+              severity INTEGER NOT NULL,
+              source TEXT NOT NULL,
+              lat REAL,
+              lon REAL,
+              image_url TEXT DEFAULT '',
+              ingest_kind TEXT NOT NULL DEFAULT 'realtime'
+            );
+
+            CREATE TABLE IF NOT EXISTS feedback_events (
+              id INTEGER PRIMARY KEY AUTOINCREMENT,
+              created_at TEXT NOT NULL,
+              asset_id TEXT NOT NULL,
+              helpful INTEGER NOT NULL,
+              reason TEXT DEFAULT '',
+              chosen_action TEXT DEFAULT ''
+            );
+
+            CREATE TABLE IF NOT EXISTS action_weights (
+              action TEXT PRIMARY KEY,
+              weight REAL NOT NULL DEFAULT 0,
+              updated_at TEXT NOT NULL
+            );
+
+            CREATE TABLE IF NOT EXISTS assets_snapshot (
+              asset_id TEXT PRIMARY KEY,
+              updated_at TEXT NOT NULL,
+              risk_score REAL NOT NULL,
+              safety_band TEXT NOT NULL,
+              urgency TEXT NOT NULL,
+              activity_score REAL NOT NULL,
+              inconsistency_score REAL NOT NULL,
+              confidence REAL NOT NULL,
+              top_reason TEXT NOT NULL,
+              risk_factors_json TEXT NOT NULL
+            );
+
+            CREATE TABLE IF NOT EXISTS model_metadata (
+              key TEXT PRIMARY KEY,
+              value TEXT NOT NULL,
+              updated_at TEXT NOT NULL
+            );
+            """
+        )
+        self.conn.commit()
+
+    def set_metadata(self, key: str, value: str) -> None:
+        self.conn.execute(
+            """
+            INSERT INTO model_metadata (key, value, updated_at)
+            VALUES (?, ?, ?)
+            ON CONFLICT(key) DO UPDATE SET value=excluded.value, updated_at=excluded.updated_at
+            """,
+            (key, value, now_utc().isoformat()),
+        )
+        self.conn.commit()
+
+    def seed_reports(self, reports_df: pd.DataFrame) -> None:
+        rows = []
+        for _, row in reports_df.iterrows():
+            report_id = str(row.get("report_id") or f"RPT-{uuid.uuid4().hex[:10]}")
+            rows.append(
+                (
+                    report_id,
+                    str(row.get("asset_id")),
+                    str(parse_ts(row.get("created_at"))),
+                    str(row.get("report_type") or "crack"),
+                    str(row.get("description") or ""),
+                    int(max(1, min(5, int(row.get("severity") or 3)))),
+                    str(row.get("source") or "inspection"),
+                    float(row.get("lat")) if pd.notna(row.get("lat")) else None,
+                    float(row.get("lon")) if pd.notna(row.get("lon")) else None,
+                    str(row.get("image_url") or ""),
+                    "seed",
+                )
+            )
+
+        self.conn.executemany(
+            """
+            INSERT OR IGNORE INTO reports_events
+            (report_id, asset_id, created_at, report_type, description, severity, source, lat, lon, image_url, ingest_kind)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            rows,
+        )
+        self.conn.commit()
+
+    def list_reports(self) -> pd.DataFrame:
+        rows = self.conn.execute(
+            """
+            SELECT report_id, asset_id, created_at, report_type, description, severity, source, lat, lon, image_url
+            FROM reports_events
+            ORDER BY created_at DESC
+            """
+        ).fetchall()
+        if not rows:
+            return pd.DataFrame(
+                columns=["report_id", "asset_id", "created_at", "report_type", "description", "severity", "source", "lat", "lon", "image_url"]
+            )
+        return pd.DataFrame([dict(r) for r in rows])
+
+    def get_snapshot_risk(self, asset_id: str) -> Optional[float]:
+        row = self.conn.execute("SELECT risk_score FROM assets_snapshot WHERE asset_id = ?", (asset_id,)).fetchone()
+        if row is None:
+            return None
+        return float(row["risk_score"])
+
+    def upsert_snapshot(self, payload: Dict[str, Any]) -> None:
+        self.conn.execute(
+            """
+            INSERT INTO assets_snapshot
+            (asset_id, updated_at, risk_score, safety_band, urgency, activity_score, inconsistency_score, confidence, top_reason, risk_factors_json)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(asset_id) DO UPDATE SET
+              updated_at=excluded.updated_at,
+              risk_score=excluded.risk_score,
+              safety_band=excluded.safety_band,
+              urgency=excluded.urgency,
+              activity_score=excluded.activity_score,
+              inconsistency_score=excluded.inconsistency_score,
+              confidence=excluded.confidence,
+              top_reason=excluded.top_reason,
+              risk_factors_json=excluded.risk_factors_json
+            """,
+            (
+                payload["asset_id"],
+                payload["updated_at"],
+                payload["risk_score"],
+                payload["safety_band"],
+                payload["urgency"],
+                payload["activity_score"],
+                payload["inconsistency_score"],
+                payload["confidence"],
+                payload["top_reason"],
+                json.dumps(payload["risk_factors"]),
+            ),
+        )
+
+    def add_report_event(self, payload: Dict[str, Any], ingest_kind: str = "realtime") -> str:
+        report_id = str(payload.get("report_id") or f"RPT-{uuid.uuid4().hex[:10]}")
+        self.conn.execute(
+            """
+            INSERT INTO reports_events
+            (report_id, asset_id, created_at, report_type, description, severity, source, lat, lon, image_url, ingest_kind)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                report_id,
+                payload["asset_id"],
+                payload["created_at"],
+                payload["report_type"],
+                payload["description"],
+                payload["severity"],
+                payload["source"],
+                payload.get("lat"),
+                payload.get("lon"),
+                payload.get("image_url") or "",
+                ingest_kind,
+            ),
+        )
+        return report_id
+
+    def add_report_events(self, rows: List[Dict[str, Any]], ingest_kind: str = "batch") -> None:
+        self.conn.executemany(
+            """
+            INSERT INTO reports_events
+            (report_id, asset_id, created_at, report_type, description, severity, source, lat, lon, image_url, ingest_kind)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            [
+                (
+                    row["report_id"],
+                    row["asset_id"],
+                    row["created_at"],
+                    row["report_type"],
+                    row["description"],
+                    row["severity"],
+                    row["source"],
+                    row.get("lat"),
+                    row.get("lon"),
+                    row.get("image_url") or "",
+                    ingest_kind,
+                )
+                for row in rows
+            ],
+        )
+
+    def add_feedback_event(self, payload: Dict[str, Any]) -> None:
+        self.conn.execute(
+            """
+            INSERT INTO feedback_events (created_at, asset_id, helpful, reason, chosen_action)
+            VALUES (?, ?, ?, ?, ?)
+            """,
+            (
+                payload["created_at"],
+                payload["asset_id"],
+                1 if payload["helpful"] else 0,
+                payload.get("reason", ""),
+                payload.get("chosen_action", ""),
+            ),
+        )
+
+    def update_action_weight(self, action: str, delta: float) -> None:
+        row = self.conn.execute("SELECT weight FROM action_weights WHERE action = ?", (action,)).fetchone()
+        next_weight = float(row["weight"]) + delta if row else delta
+        self.conn.execute(
+            """
+            INSERT INTO action_weights (action, weight, updated_at)
+            VALUES (?, ?, ?)
+            ON CONFLICT(action) DO UPDATE SET weight=excluded.weight, updated_at=excluded.updated_at
+            """,
+            (action, next_weight, now_utc().isoformat()),
+        )
+
+    def load_action_weights(self) -> Dict[str, float]:
+        rows = self.conn.execute("SELECT action, weight FROM action_weights").fetchall()
+        return {str(r["action"]): float(r["weight"]) for r in rows}
+
+    def commit(self) -> None:
+        self.conn.commit()
+
+    def rollback(self) -> None:
+        self.conn.rollback()
 
 
 class InfraPulseEngine:
@@ -149,14 +391,21 @@ class InfraPulseEngine:
         self.base_assets: pd.DataFrame = self.artifact["assets_df"].copy()
         self.base_reports: pd.DataFrame = self.artifact["reports_df"].copy()
         self.vectorizer = self.artifact["vectorizer"]
-        self.asset_tfidf_base = self.artifact["asset_tfidf"]
-        self.report_tfidf_base = self.artifact["report_tfidf"]
         self.imputer = self.artifact["imputer"]
         self.scaler = self.artifact["scaler"]
         self.kmeans = self.artifact["kmeans"]
         self.structured_cols = list(self.artifact.get("structured_cols", STRUCTURED_COLS))
         self.cluster_summaries = self.artifact["cluster_summaries"]
-        self.action_weights = self._load_action_weights()
+
+        self.repo = RuntimeRepository(DB_PATH)
+        self.repo.seed_reports(self.base_reports)
+        self.repo.set_metadata("risk_model", "hybrid_explainable_v1")
+        self.repo.set_metadata(
+            "risk_thresholds",
+            json.dumps({"low": 0.30, "guarded": 0.55, "elevated": 0.75}),
+        )
+
+        self.action_weights = self.repo.load_action_weights()
         self.refresh_runtime()
 
     def _load_or_build_artifact(self) -> Dict[str, Any]:
@@ -164,24 +413,8 @@ class InfraPulseEngine:
             build_infra_artifacts(force=False)
         return joblib.load(self.artifact_path)
 
-    def _load_action_weights(self) -> Dict[str, float]:
-        weights: Dict[str, float] = defaultdict(float)
-        for row in read_jsonl(FEEDBACK_PATH):
-            action = str(row.get("chosen_action", "")).strip()
-            if not action:
-                continue
-            helpful = bool(row.get("helpful", False))
-            weights[action] += 0.8 if helpful else -0.4
-        return weights
-
     def refresh_runtime(self) -> None:
-        extra_reports = pd.DataFrame(read_jsonl(NEW_REPORTS_PATH))
-        if not extra_reports.empty:
-            extra_reports["cluster_id"] = np.nan
-            reports = pd.concat([self.base_reports, extra_reports], ignore_index=True, sort=False)
-        else:
-            reports = self.base_reports.copy()
-
+        reports = self.repo.list_reports()
         reports["created_at"] = parse_ts(reports["created_at"])
         reports["description"] = reports["description"].fillna("").astype(str)
         reports["report_type"] = reports["report_type"].fillna("crack").astype(str)
@@ -208,12 +441,31 @@ class InfraPulseEngine:
         self.asset_scores = self._compute_asset_scores()
         self.assets_updated_at = now_utc().isoformat()
 
+        for asset_id, score in self.asset_scores.items():
+            self.repo.upsert_snapshot(
+                {
+                    "asset_id": asset_id,
+                    "updated_at": self.assets_updated_at,
+                    "risk_score": score.risk_score,
+                    "safety_band": score.safety_band,
+                    "urgency": score.urgency,
+                    "activity_score": score.activity_score,
+                    "inconsistency_score": score.inconsistency_score,
+                    "confidence": score.confidence,
+                    "top_reason": score.top_reason,
+                    "risk_factors": score.risk_factors,
+                }
+            )
+        self.repo.commit()
+
     def _build_runtime_assets(self) -> pd.DataFrame:
         assets = self.base_assets.copy()
         now = now_utc()
+        recent_7 = self.reports[self.reports["created_at"] >= (now - timedelta(days=7))]
         recent_30 = self.reports[self.reports["created_at"] >= (now - timedelta(days=30))]
         recent_180 = self.reports[self.reports["created_at"] >= (now - timedelta(days=180))]
 
+        count_7 = recent_7.groupby("asset_id").size().rename("report_7d")
         count_30 = recent_30.groupby("asset_id").size().rename("report_30d_new")
         count_180 = recent_180.groupby("asset_id").size().rename("report_180d_new")
         severity_avg = recent_180.groupby("asset_id")["severity"].mean().rename("severity_avg")
@@ -227,11 +479,13 @@ class InfraPulseEngine:
             .rename("recent_report_text")
         )
 
+        assets = assets.merge(count_7, on="asset_id", how="left")
         assets = assets.merge(count_30, on="asset_id", how="left")
         assets = assets.merge(count_180, on="asset_id", how="left")
         assets = assets.merge(severity_avg, on="asset_id", how="left")
         assets = assets.merge(latest_text, on="asset_id", how="left")
 
+        assets["report_7d"] = assets["report_7d"].fillna(0).astype(int)
         assets["report_30d"] = assets["report_30d_new"].fillna(assets["report_30d"]).fillna(0).astype(int)
         assets["report_180d"] = assets["report_180d_new"].fillna(assets["report_180d"]).fillna(0).astype(int)
         assets["severity_avg"] = assets["severity_avg"].fillna(2.3)
@@ -267,9 +521,10 @@ class InfraPulseEngine:
             traffic_norm = clamp(math.log1p(float(row["traffic_metric"])) / math.log1p(140000))
             condition_factor = clamp(1.0 - float(row["condition_norm"]))
             report_norm = clamp(float(row["report_30d"]) / 30.0)
-            baseline = 0.34 * condition_factor + 0.22 * age_norm + 0.22 * traffic_norm + 0.22 * report_norm
+            baseline = 0.32 * condition_factor + 0.22 * age_norm + 0.22 * traffic_norm + 0.24 * report_norm
 
             activity_score = clamp((float(row["activity_ratio"]) - 1.0) / 3.0)
+            recency_boost = clamp(float(row.get("report_7d", 0)) / 10.0)
 
             text_severity = score_severity_text(str(row.get("recent_report_text", "")))
             mismatch_text = 0.0
@@ -294,7 +549,7 @@ class InfraPulseEngine:
                 mismatch_trend = 0.22
 
             inconsistency_score = clamp(mismatch_text + mismatch_neighbor + mismatch_trend)
-            risk_score = clamp(baseline + 0.22 * activity_score + 0.2 * inconsistency_score)
+            risk_score = clamp(baseline + 0.2 * activity_score + 0.2 * inconsistency_score + 0.08 * recency_boost)
 
             top_similarity = [float(sims[n]) for n in neighbors[:3]] if neighbors else [0.0]
             confidence = clamp(float(np.mean(top_similarity)), 0.12, 0.98)
@@ -304,14 +559,16 @@ class InfraPulseEngine:
                 "activity spike": activity_score,
                 "inconsistency mismatch": inconsistency_score,
                 "age and load pressure": (age_norm + traffic_norm) / 2.0,
+                "recency acceleration": recency_boost,
             }
             top_reason = max(reason_scores, key=reason_scores.get)
+            risk_factors = [name for name, _ in sorted(reason_scores.items(), key=lambda item: item[1], reverse=True)[:3]]
             tags = sorted(
-                set(
-                    [top_reason]
-                    + [str(t) for t in tokenize(str(row.get("recent_report_text", ""))) if t in SEVERITY_HINTS]
-                )
+                set([top_reason] + [str(t) for t in tokenize(str(row.get("recent_report_text", ""))) if t in SEVERITY_HINTS])
             )[:6]
+
+            safety_band = safety_band_for_score(risk_score)
+            urgency = urgency_for_band(safety_band)
 
             scores[str(row["asset_id"])] = AssetScores(
                 risk_score=risk_score,
@@ -320,6 +577,9 @@ class InfraPulseEngine:
                 confidence=confidence,
                 top_reason=top_reason,
                 tags=tags,
+                safety_band=safety_band,
+                urgency=urgency,
+                risk_factors=risk_factors,
             )
 
         return scores
@@ -337,6 +597,9 @@ class InfraPulseEngine:
                 "confidence": scores.confidence,
                 "top_reason": scores.top_reason,
                 "tags": scores.tags,
+                "safety_band": scores.safety_band,
+                "urgency": scores.urgency,
+                "risk_factors": scores.risk_factors,
                 "last_updated": self.assets_updated_at,
             }
         )
@@ -369,6 +632,9 @@ class InfraPulseEngine:
                         "asset_type": row["asset_type"],
                         "name": row["name"],
                         "risk_score": scores.risk_score,
+                        "safety_band": scores.safety_band,
+                        "urgency": scores.urgency,
+                        "risk_factors": scores.risk_factors,
                         "inconsistency_score": scores.inconsistency_score,
                         "activity_score": scores.activity_score,
                         "top_reason": scores.top_reason,
@@ -398,31 +664,71 @@ class InfraPulseEngine:
         return hypotheses
 
     def _recommended_actions(self, asset_payload: Dict[str, Any]) -> List[str]:
-        actions = [
-            "Schedule targeted field inspection within 7 days.",
-            "Prioritize drainage and shoulder cleaning before next rainfall event.",
-            "Issue temporary load/speed advisory pending structural follow-up.",
-            "Order non-destructive testing for suspected internal deterioration.",
-            "Bundle nearby work orders to reduce repeat patch cycles.",
-        ]
+        urgency = str(asset_payload.get("urgency", "monitor"))
         text = str(asset_payload.get("recent_report_text", "")).lower()
-        if "drainage" in text or "washout" in text:
-            actions.insert(0, "Deploy drainage crew and inspect outfalls within 48 hours.")
-        if "corrosion" in text or "spalling" in text:
-            actions.insert(0, "Perform corrosion mitigation and concrete patch plan review.")
-        if "pothole" in text or "sinkhole" in text:
-            actions.insert(0, "Execute emergency patch and base-layer integrity scan.")
 
-        unique = []
+        hazard_actions = {
+            "pothole": [
+                "Execute emergency patch and base-layer integrity scan.",
+                "Deploy temporary lane safety controls and monitor settlement.",
+            ],
+            "sinkhole": [
+                "Initiate geotechnical assessment and immediate cavity stabilization.",
+                "Restrict heavy loads until void remediation is complete.",
+            ],
+            "drainage": [
+                "Deploy drainage crew and inspect outfalls within 48 hours.",
+                "Clear inlets and regrade shoulder runoff channels.",
+            ],
+            "washout": [
+                "Stabilize embankment and reinforce edge protection before next rainfall.",
+                "Inspect culvert capacity and erosion controls.",
+            ],
+            "corrosion": [
+                "Perform corrosion mitigation and concrete patch plan review.",
+                "Schedule NDT to assess section loss and hidden deterioration.",
+            ],
+            "spalling": [
+                "Perform concrete delamination survey and targeted patch repair.",
+                "Inspect joint leakage and seal vulnerable deck zones.",
+            ],
+            "joint": [
+                "Inspect and reseal expansion joints to stop accelerated ingress.",
+                "Prioritize bearing and support inspection near failed joints.",
+            ],
+            "fatigue": [
+                "Order non-destructive fatigue testing at critical details.",
+                "Issue temporary load advisory pending structural follow-up.",
+            ],
+            "scour": [
+                "Conduct underwater foundation inspection for scour depth verification.",
+                "Install interim scour countermeasures at vulnerable piers.",
+            ],
+        }
+
+        base = [
+            "Schedule targeted field inspection within 7 days.",
+            "Bundle nearby work orders to reduce repeat patch cycles.",
+            "Update maintenance plan with observed failure trend signals.",
+        ]
+
+        prioritized: list[str] = []
+        for key, actions in hazard_actions.items():
+            if key in text:
+                prioritized.extend(actions)
+
+        if urgency == "immediate_48h":
+            prioritized.insert(0, "Dispatch rapid-response crew and implement immediate hazard controls.")
+        elif urgency == "schedule_7d":
+            prioritized.insert(0, "Issue prioritized work order for completion within 7 days.")
+
+        actions = prioritized + base
+        unique: list[str] = []
         for action in actions:
             if action not in unique:
                 unique.append(action)
 
-        ranked = sorted(
-            unique,
-            key=lambda action: self.action_weights.get(action, 0.0),
-            reverse=True,
-        )
+        ranked = sorted(unique, key=lambda action: self.action_weights.get(action, 0.0), reverse=True)
         return ranked[:5]
 
     def _similar_assets(self, asset_id: str, top_k: int = 5) -> List[Dict[str, Any]]:
@@ -515,6 +821,9 @@ class InfraPulseEngine:
             "similar_assets": self._similar_assets(asset_id, top_k=6),
             "similar_incidents": self._similar_incidents(asset_id, top_k=10),
             "risk_score": record["risk_score"],
+            "safety_band": record["safety_band"],
+            "urgency": record["urgency"],
+            "risk_factors": record["risk_factors"],
             "inconsistency_score": record["inconsistency_score"],
             "confidence": record["confidence"],
             "cause_hypotheses": self._cause_hypotheses_for_asset(asset_id, max_items=4),
@@ -555,6 +864,9 @@ class InfraPulseEngine:
                     "lon": float(row["lon"]),
                     "distance_km": None if pd.isna(row["distance_km"]) else round(float(row["distance_km"]), 2),
                     "risk_score": round(score.risk_score, 4),
+                    "safety_band": score.safety_band,
+                    "urgency": score.urgency,
+                    "risk_factors": score.risk_factors,
                     "activity_score": round(score.activity_score, 4),
                     "inconsistency_score": round(score.inconsistency_score, 4),
                     "top_reason": score.top_reason,
@@ -612,7 +924,8 @@ class InfraPulseEngine:
                     "mode": "assetRisk",
                     "asset_id": asset_id,
                     "risk_score": details["risk_score"],
-                    "inconsistency_score": details["inconsistency_score"],
+                    "safety_band": details["safety_band"],
+                    "urgency": details["urgency"],
                 },
                 "debug": {"query_text": text},
             }
@@ -638,7 +951,6 @@ class InfraPulseEngine:
                 "debug": {},
             }
 
-        # default assetRisk without specific id: return highest risk assets
         top_assets = self.area_hotspots(lat=None, lon=None, radius_km=None, top_k=20)
         return {
             "results": top_assets,
@@ -656,12 +968,12 @@ class InfraPulseEngine:
         idx = int(distances.idxmin())
         return str(self.assets.iloc[idx]["asset_id"])
 
-    def ingest_report(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+    def _normalize_event_input(self, payload: Dict[str, Any], fallback_asset_id: Optional[str] = None) -> Dict[str, Any]:
         description = str(payload.get("description", "")).strip()
         if not description:
             raise ValueError("description is required")
 
-        asset_id = payload.get("asset_id")
+        asset_id = payload.get("asset_id") or fallback_asset_id
         lat = payload.get("lat")
         lon = payload.get("lon")
         if asset_id is None and lat is not None and lon is not None:
@@ -678,50 +990,126 @@ class InfraPulseEngine:
             default_lat = None
             default_lon = None
 
-        report_type = infer_report_type(description)
+        report_type = str(payload.get("report_type") or infer_report_type(description))
         severity = payload.get("severity")
         if severity is None:
             severity = SEVERITY_HINTS.get(report_type, 3)
         severity = int(max(1, min(5, int(severity))))
-        image_url = str(payload.get("image_url", "")).strip()
-        source = str(payload.get("source", "manual"))
-        report_id = f"RPT-{uuid.uuid4().hex[:10]}"
 
-        record = {
-            "report_id": report_id,
+        source = str(payload.get("source", "manual")).strip().lower() or "manual"
+        if source not in ALLOWED_SOURCES:
+            raise ValueError(f"source must be one of: {sorted(ALLOWED_SOURCES)}")
+
+        created_at = payload.get("created_at")
+        created_at_iso = str(parse_ts(created_at)) if created_at else now_utc().isoformat()
+
+        return {
+            "report_id": str(payload.get("report_id") or f"RPT-{uuid.uuid4().hex[:10]}"),
             "asset_id": asset_id,
-            "created_at": now_utc().isoformat(),
+            "created_at": created_at_iso,
             "report_type": report_type,
             "description": description,
             "severity": severity,
             "source": source,
             "lat": float(lat) if lat is not None else default_lat,
             "lon": float(lon) if lon is not None else default_lon,
-            "image_url": image_url,
+            "image_url": str(payload.get("image_url", "")).strip(),
         }
-        append_jsonl(NEW_REPORTS_PATH, record)
+
+    def ingest_report(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+        normalized = self._normalize_event_input(payload)
+        prior_risk = self.repo.get_snapshot_risk(normalized["asset_id"])
+
+        try:
+            report_id = self.repo.add_report_event(normalized, ingest_kind="realtime")
+            self.repo.commit()
+        except sqlite3.IntegrityError as exc:
+            self.repo.rollback()
+            raise ValueError(f"duplicate report_id: {normalized['report_id']}") from exc
+
         self.refresh_runtime()
 
-        updated = self._asset_record(asset_id)
+        updated = self._asset_record(normalized["asset_id"])
+        risk_delta_24h = 0.0 if prior_risk is None else round(float(updated["risk_score"]) - float(prior_risk), 4)
+
         return {
             "ok": True,
             "report_id": report_id,
             "updated_asset": {
-                "asset_id": asset_id,
+                "asset_id": normalized["asset_id"],
                 "risk_score": updated["risk_score"],
+                "safety_band": updated["safety_band"],
+                "urgency": updated["urgency"],
+                "risk_factors": updated["risk_factors"],
+                "risk_delta_24h": risk_delta_24h,
                 "activity_score": updated["activity_score"],
                 "inconsistency_score": updated["inconsistency_score"],
                 "confidence": updated["confidence"],
             },
         }
 
+    def ingest_batch(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+        rows_input = payload.get("rows")
+        csv_text = payload.get("csv_text")
+
+        parsed_rows: list[dict[str, Any]] = []
+        if isinstance(rows_input, list):
+            parsed_rows = [row for row in rows_input if isinstance(row, dict)]
+        elif isinstance(csv_text, str) and csv_text.strip():
+            reader = csv.DictReader(io.StringIO(csv_text))
+            parsed_rows = [dict(row) for row in reader]
+        else:
+            raise ValueError("Provide either rows (array) or csv_text (string)")
+
+        if not parsed_rows:
+            raise ValueError("No rows provided for batch ingestion")
+
+        normalized_rows = [self._normalize_event_input(row) for row in parsed_rows]
+        impacted_assets = sorted(set(row["asset_id"] for row in normalized_rows))
+        prior_snapshot = {asset_id: self.repo.get_snapshot_risk(asset_id) for asset_id in impacted_assets}
+
+        try:
+            self.repo.add_report_events(normalized_rows, ingest_kind="batch")
+            self.repo.commit()
+        except sqlite3.IntegrityError as exc:
+            self.repo.rollback()
+            raise ValueError("Batch insert failed due to duplicate report_id") from exc
+
+        self.refresh_runtime()
+
+        changed_assets = []
+        for asset_id in impacted_assets:
+            updated = self._asset_record(asset_id)
+            previous = prior_snapshot.get(asset_id)
+            delta = 0.0 if previous is None else round(float(updated["risk_score"]) - float(previous), 4)
+            changed_assets.append(
+                {
+                    "asset_id": asset_id,
+                    "risk_score": updated["risk_score"],
+                    "safety_band": updated["safety_band"],
+                    "urgency": updated["urgency"],
+                    "risk_delta_24h": delta,
+                }
+            )
+
+        changed_assets.sort(key=lambda item: abs(float(item["risk_delta_24h"])), reverse=True)
+
+        return {
+            "ok": True,
+            "ingested_count": len(normalized_rows),
+            "impacted_assets_count": len(impacted_assets),
+            "top_changed_assets": changed_assets[:20],
+        }
+
     def submit_feedback(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         asset_id = str(payload.get("asset_id", "")).strip()
         if not asset_id:
             raise ValueError("asset_id is required")
+
         helpful = bool(payload.get("helpful", False))
         reason = str(payload.get("reason", "")).strip()
         chosen_action = str(payload.get("chosen_action", "")).strip()
+
         event = {
             "created_at": now_utc().isoformat(),
             "asset_id": asset_id,
@@ -729,9 +1117,14 @@ class InfraPulseEngine:
             "reason": reason,
             "chosen_action": chosen_action,
         }
-        append_jsonl(FEEDBACK_PATH, event)
+
+        self.repo.add_feedback_event(event)
         if chosen_action:
-            self.action_weights[chosen_action] += 0.8 if helpful else -0.4
+            delta = 0.8 if helpful else -0.4
+            self.repo.update_action_weight(chosen_action, delta)
+            self.action_weights[chosen_action] = self.action_weights.get(chosen_action, 0.0) + delta
+        self.repo.commit()
+
         return {"ok": True, "asset_id": asset_id}
 
     def sample_examples(self) -> Dict[str, Any]:

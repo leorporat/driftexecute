@@ -17,14 +17,21 @@ Synthetic (auto-generated if missing):
 Outputs:
 
 - `ml/artifacts/infra_index.joblib`
-- cluster summaries + TF-IDF index + structured feature scaler
 
-## Inference
+## Inference Runtime
 
 `ml/infra_inference.py` provides:
 
-- map GeoJSON scores
-- asset detail retrieval
+- risk scoring (hybrid explainable)
+- safety band + urgency mapping
+- map GeoJSON and asset detail retrieval
 - report clustering + cause hypotheses
-- ingestion + feedback loops
+- single and batch ingestion with synchronous recalculation
+- feedback-aware action ranking
 
+Runtime persistence is SQLite-backed at `ml/feedback/infra_runtime.db` with tables:
+- `reports_events`
+- `feedback_events`
+- `action_weights`
+- `assets_snapshot`
+- `model_metadata`
