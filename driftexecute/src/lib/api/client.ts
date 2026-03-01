@@ -707,7 +707,42 @@ export async function getInfraMapAssets(type: "all" | "road" | "bridge" = "all")
 }
 
 export async function getInfraAssetDetails(assetId: string): Promise<InfraAssetDetailsResponse> {
-  return fetchBackend<InfraAssetDetailsResponse>(`/api/asset/${encodeURIComponent(assetId)}`);
+  try {
+    return await fetchBackend<InfraAssetDetailsResponse>(`/api/asset/${encodeURIComponent(assetId)}`);
+  } catch (error) {
+    const fallback = await fetchFallbackInfraGeoJson().catch(() => null);
+    const feature = fallback?.features?.find((item) => item.properties.asset_id === assetId);
+    if (!feature) {
+      throw error;
+    }
+    return {
+      asset: {
+        asset_id: feature.properties.asset_id,
+        asset_type: feature.properties.asset_type,
+        name: feature.properties.name,
+        lat: feature.geometry.coordinates[1],
+        lon: feature.geometry.coordinates[0],
+        risk_score: feature.properties.risk_score,
+        activity_score: feature.properties.activity_score,
+        inconsistency_score: feature.properties.inconsistency_score,
+        confidence: 0.35,
+        top_reason: feature.properties.top_reason,
+        tags: feature.properties.tags,
+      },
+      last_reports: [],
+      similar_assets: [],
+      similar_incidents: [],
+      risk_score: feature.properties.risk_score,
+      inconsistency_score: feature.properties.inconsistency_score,
+      confidence: 0.35,
+      cause_hypotheses: [
+        "Backend/ML API unavailable. Showing fallback asset sample only.",
+      ],
+      recommended_actions: [
+        "Start backend (:3001) and ML API (:8001) to load live asset intelligence.",
+      ],
+    };
+  }
 }
 
 export async function getInfraActivityFeed(): Promise<InfraClusterItem[]> {
