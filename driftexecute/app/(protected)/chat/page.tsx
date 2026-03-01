@@ -1,13 +1,17 @@
-import { ChatWindow } from "@/components/chat-window";
+import Link from "next/link";
 
 export default function ChatPage() {
   return (
-    <section>
-      <h1 className="text-2xl font-bold text-zinc-100">Trip Assistant</h1>
-      <p className="read-box mb-5 mt-3 text-sm">
-        Multi-turn local chat with retrieval over your similar saved trips.
+    <section className="max-w-3xl space-y-4">
+      <h1 className="text-2xl font-bold text-zinc-100">Assistant (Legacy)</h1>
+      <p className="read-box text-sm">
+        The old travel chat module is disabled in the InfraPulse build.
       </p>
-      <ChatWindow />
+      <p className="text-sm text-zinc-300">
+        Use <Link className="text-orange-400 underline" href="/map">Map</Link>,{" "}
+        <Link className="text-orange-400 underline" href="/activity">Activity</Link>, and{" "}
+        <Link className="text-orange-400 underline" href="/inspect">Inspect</Link> for the live demo.
+      </p>
     </section>
   );
 }
